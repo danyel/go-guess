@@ -55,6 +55,7 @@ type IParticipantService interface {
 type IInvitationService interface {
 	List(context.Context, uint) ([]model.Invitation, error)
 	Create(context.Context, uint, uint) (model.Invitation, error)
+	Review(context.Context, uint, uint) (model.Interview, error)
 	GetInterview(context.Context, string) (model.Interview, error)
 	Accept(context.Context, string) (model.Interview, error)
 	SaveAnswer(context.Context, string, uint, string) error
@@ -181,6 +182,7 @@ func (s *QuestionService) Update(ctx context.Context, id uint, value model.Quest
 
 func validateQuestion(value model.Question) (model.Question, error) {
 	value.Text = strings.TrimSpace(value.Text)
+	value.CodeSnippet = strings.TrimSpace(value.CodeSnippet)
 	value.ReferenceAnswer = strings.TrimSpace(value.ReferenceAnswer)
 	switch value.Type {
 	case "open", "multiple_choice", "radio", "code_review":
@@ -203,10 +205,16 @@ func validateQuestion(value model.Question) (model.Question, error) {
 	if (value.Type == "open" || value.Type == "code_review") && value.ReferenceAnswer == "" {
 		return model.Question{}, fmt.Errorf("%w: a reference answer is required", ErrInvalidQuestion)
 	}
+	if value.Type == "code_review" && value.CodeSnippet == "" {
+		return model.Question{}, fmt.Errorf("%w: a code snippet is required", ErrInvalidQuestion)
+	}
 	if value.Type == "open" || value.Type == "code_review" {
 		value.Options = nil
 	} else {
 		value.ReferenceAnswer = ""
+	}
+	if value.Type != "code_review" {
+		value.CodeSnippet = ""
 	}
 	return value, nil
 }
@@ -374,6 +382,19 @@ func (s *InvitationService) Create(ctx context.Context, jobID, participantID uin
 		JobID: jobID, ParticipantID: participantID, Token: uuid.NewString(),
 		Status: "pending", DurationMinutes: job.DurationMinutes,
 	})
+}
+
+func (s *InvitationService) Review(ctx context.Context, jobID, invitationID uint) (model.Interview, error) {
+	invitations, err := s.store.ListInvitations(ctx, jobID)
+	if err != nil {
+		return model.Interview{}, err
+	}
+	for _, invitation := range invitations {
+		if invitation.ID == invitationID {
+			return s.store.GetInterview(ctx, invitation.Token)
+		}
+	}
+	return model.Interview{}, repository.ErrNotFound
 }
 
 func (s *InvitationService) GetInterview(ctx context.Context, token string) (model.Interview, error) {

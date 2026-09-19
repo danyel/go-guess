@@ -62,10 +62,15 @@ only published jobs can create invitations. Once an invitation exists, its quest
 set cannot be changed, and its duration is snapshotted so later job edits do not
 alter an active interview.
 
-Invitation URLs use an opaque UUID token and public `/api/interviews/{token}` routes;
-they do not use interviewer JWT authentication. An invitation progresses from
+Invitation URLs expose an opaque UUID token as `/participant/:invitationId` and use
+public `/api/interviews/{token}` API routes; they do not use interviewer JWT
+authentication. An invitation progresses from
 `pending` to `accepted` to `completed`. Answers may only be saved while accepted
-and before the snapshotted timer expires.
+and before the snapshotted timer expires. The participant UI must gate questions
+behind explicit acceptance and provide First, Previous, Next, Last, and Submit
+controls. Interviewer review uses the protected
+`GET /api/jobs/{id}/invitations/{invitationId}` endpoint, which intentionally
+includes reference answers; the public interview endpoint does not.
 
 ## Repository conventions
 
@@ -84,6 +89,9 @@ and before the snapshotted timer expires.
   at least two options for those types. Open and code-review questions instead
   require a `referenceAnswer` textarea. Never include that interviewer-only answer
   in public interview responses.
+- Code-review questions also require `codeSnippet`. It is safe to include in the
+  participant payload and is rendered as a line-numbered pull-request review panel;
+  the participant's review comment remains the ordinary persisted answer.
 - Traits are de-duplicated case-insensitively through their normalized database
   value. Labels and both skill groups all reuse the same `traits` table.
 - Participant creation is multipart form data using `firstName`, `lastName`,

@@ -52,6 +52,7 @@ type QuestionRequest struct {
 	Text            string   `json:"text"`
 	Type            string   `json:"type"`
 	Options         []string `json:"options"`
+	CodeSnippet     string   `json:"codeSnippet"`
 	ReferenceAnswer string   `json:"referenceAnswer"`
 }
 
@@ -60,6 +61,7 @@ type QuestionResponse struct {
 	Text            string   `json:"text"`
 	Type            string   `json:"type"`
 	Options         []string `json:"options"`
+	CodeSnippet     string   `json:"codeSnippet"`
 	ReferenceAnswer string   `json:"referenceAnswer"`
 	Deprecated      bool     `json:"deprecated"`
 }
@@ -123,16 +125,23 @@ type InterviewJobResponse struct {
 }
 
 type InterviewQuestionResponse struct {
-	ID      uint     `json:"id"`
-	Text    string   `json:"text"`
-	Type    string   `json:"type"`
-	Options []string `json:"options"`
+	ID          uint     `json:"id"`
+	Text        string   `json:"text"`
+	Type        string   `json:"type"`
+	Options     []string `json:"options"`
+	CodeSnippet string   `json:"codeSnippet"`
 }
 
 type InterviewResponse struct {
 	Invitation InvitationResponse   `json:"invitation"`
 	Job        InterviewJobResponse `json:"job"`
 	Answers    map[uint]string      `json:"answers"`
+}
+
+type InvitationReviewResponse struct {
+	Invitation InvitationResponse `json:"invitation"`
+	Job        JobResponse        `json:"job"`
+	Answers    map[uint]string    `json:"answers"`
 }
 
 type AnswerRequest struct {

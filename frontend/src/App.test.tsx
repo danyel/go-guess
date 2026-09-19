@@ -11,6 +11,7 @@ const question = {
   type: 'open' as const,
   options: [],
   referenceAnswer: 'Use timeouts, retries, and idempotency.',
+  codeSnippet: '',
   deprecated: false,
 }
 
@@ -81,7 +82,7 @@ function mockApi() {
           participantEmail: 'amelie@example.com',
           token: 'invite-token',
           status: 'pending',
-          participantUrl: 'https://example.test/interview/invite-token',
+          participantUrl: 'https://example.test/participant/invite-token',
           acceptedAt: null,
           completedAt: null,
           createdAt: '2026-09-19T10:00:00Z',
@@ -95,7 +96,9 @@ function mockApi() {
         return response({
           ...question,
           text: 'Updated resilience question',
+          type: 'code_review',
           referenceAnswer: 'Prefer bounded retries with jitter.',
+          codeSnippet: '+ return retry(request)',
         })
       if (path === '/api/jobs/7/questions/11') return response({}, method === 'DELETE' ? 200 : 201)
       throw new Error(`Unexpected request: ${path}`)
@@ -175,6 +178,7 @@ describe('Go Guess frontend', () => {
     expect(screen.queryByRole('button', { name: 'Remove option Retries' })).not.toBeInTheDocument()
     await user.selectOptions(screen.getByLabelText('Response type'), 'code_review')
     expect(screen.getByLabelText('Expected answer')).toBeInTheDocument()
+    expect(screen.getByLabelText('Code snippet')).toBeRequired()
   })
 
   it('surfaces API failures instead of demo content', async () => {
@@ -218,6 +222,7 @@ describe('Go Guess frontend', () => {
           type: 'open',
           options: [],
           referenceAnswer: 'Mention ownership and closure.',
+          codeSnippet: '',
         }),
       }),
     )
@@ -231,28 +236,52 @@ describe('Go Guess frontend', () => {
   it('populates and persists the reference answer while editing', async () => {
     authenticate()
     const user = userEvent.setup()
+    const codeReviewQuestion = {
+      ...question,
+      id: 21,
+      type: 'code_review' as const,
+      text: 'Review this retry change',
+      codeSnippet: '+ return retry(request)',
+    }
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(input)
+      const method = options?.method ?? 'GET'
+      if (path.startsWith('/api/questions') && method === 'GET')
+        return response([codeReviewQuestion])
+      if (path === '/api/questions/21' && method === 'PUT')
+        return response({
+          ...codeReviewQuestion,
+          text: 'Updated resilience question',
+          referenceAnswer: 'Prefer bounded retries with jitter.',
+        })
+      if (!defaultFetch) throw new Error(`Unexpected request: ${path}`)
+      return defaultFetch(input, options)
+    })
     renderApp('/questions')
 
-    await user.click(await screen.findByRole('button', { name: `Edit ${question.text}` }))
+    await user.click(await screen.findByRole('button', { name: `Edit ${codeReviewQuestion.text}` }))
     const prompt = screen.getByLabelText('Question prompt')
     await user.clear(prompt)
     await user.type(prompt, 'Updated resilience question')
-    const reference = screen.getByLabelText('Reference answer')
-    expect(reference).toHaveValue(question.referenceAnswer)
+    const reference = screen.getByLabelText('Expected answer')
+    expect(reference).toHaveValue(codeReviewQuestion.referenceAnswer)
+    expect(screen.getByLabelText('Code snippet')).toHaveValue(codeReviewQuestion.codeSnippet)
     await user.clear(reference)
     await user.type(reference, 'Prefer bounded retries with jitter.')
 
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
     expect(fetch).toHaveBeenCalledWith(
-      '/api/questions/11',
+      '/api/questions/21',
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({
           text: 'Updated resilience question',
-          type: 'open',
+          type: 'code_review',
           options: [],
           referenceAnswer: 'Prefer bounded retries with jitter.',
+          codeSnippet: '+ return retry(request)',
         }),
       }),
     )
@@ -281,17 +310,16 @@ describe('Go Guess frontend', () => {
     )
   })
 
-  it('sends invitations and displays the generated participant URL', async () => {
+  it('generates an invitation for an eligible participant and displays its URL', async () => {
     authenticate()
     const user = userEvent.setup()
     renderApp('/jobs/7')
 
     await user.click(await screen.findByRole('tab', { name: /invitations/i }))
-    await user.selectOptions(screen.getByLabelText('Eligible candidate'), '3')
-    await user.click(screen.getByRole('button', { name: /send invitation/i }))
+    await user.click(screen.getByRole('button', { name: 'Generate invitation' }))
 
     expect(
-      await screen.findByText('https://example.test/interview/invite-token'),
+      await screen.findByText('https://example.test/participant/invite-token'),
     ).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(
       '/api/jobs/7/invitations',
@@ -315,7 +343,7 @@ describe('Go Guess frontend', () => {
         participantEmail: 'amelie@example.com',
         token: 'invite-token',
         status: 'pending',
-        participantUrl: 'https://example.test/interview/invite-token',
+        participantUrl: 'https://example.test/participant/invite-token',
         acceptedAt: null,
         completedAt: null,
         createdAt: now.toISOString(),
@@ -355,17 +383,25 @@ describe('Go Guess frontend', () => {
         })
       throw new Error(`Unexpected request: ${path}`)
     })
-    renderApp('/interview/invite-token')
+    renderApp('/participant/invite-token')
     await act(async () => {
       await Promise.resolve()
       await Promise.resolve()
     })
+    expect(screen.queryByText(question.text)).not.toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Your answer' })).not.toBeInTheDocument()
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Accept and start' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
     })
     expect(screen.getByText(question.text)).toBeInTheDocument()
     expect(screen.queryByText(question.referenceAnswer)).not.toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Interview progress' })).toHaveAttribute(
+      'aria-valuenow',
+      '50',
+    )
+    for (const name of ['First', 'Previous', 'Next', 'Last', 'Submit']) {
+      expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    }
     expect(screen.getByTestId('countdown')).toHaveTextContent('10:00')
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1000)
@@ -390,6 +426,137 @@ describe('Go Guess frontend', () => {
       fireEvent.click(screen.getByRole('button', { name: 'First' }))
     })
     expect(screen.getByText(question.text)).toBeInTheDocument()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+    })
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/interviews/invite-token/finish',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(screen.getByRole('heading', { name: /thank you/i })).toBeInTheDocument()
     vi.useRealTimers()
+  })
+
+  it('renders protected invitation answers for interviewer review', async () => {
+    authenticate()
+    const user = userEvent.setup()
+    const acceptedInvitation = {
+      id: 44,
+      jobId: 7,
+      participantId: 3,
+      participantName: 'Amélie Dubois',
+      participantEmail: 'amelie@example.com',
+      token: 'review-token',
+      status: 'accepted',
+      participantUrl: 'https://example.test/participant/review-token',
+      acceptedAt: '2026-09-19T10:05:00Z',
+      completedAt: null,
+      createdAt: '2026-09-19T10:00:00Z',
+    }
+    const choiceQuestion = {
+      ...question,
+      id: 22,
+      text: 'Choose a strategy',
+      type: 'radio' as const,
+      options: ['Retry', 'Fail fast'],
+      referenceAnswer: '',
+    }
+    const codeQuestion = {
+      ...question,
+      id: 23,
+      text: 'Review the patch',
+      type: 'code_review' as const,
+      codeSnippet: '+ return retry(request)',
+      referenceAnswer: 'Bound the retry count.',
+    }
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(input)
+      if (path === '/api/jobs/7/invitations' && !options?.method)
+        return response([acceptedInvitation])
+      if (path === '/api/jobs/7/invitations/44')
+        return response({
+          invitation: acceptedInvitation,
+          job: {
+            id: 7,
+            title: job.title,
+            description: job.description,
+            position: job.position,
+            seniority: job.seniority,
+            durationMinutes: job.durationMinutes,
+            questions: [question, choiceQuestion, codeQuestion],
+          },
+          answers: {
+            '11': 'Use exponential backoff.',
+            '23': 'The retry loop needs a maximum.',
+          },
+        })
+      if (!defaultFetch) throw new Error(`Unexpected request: ${path}`)
+      return defaultFetch(input, options)
+    })
+    renderApp('/jobs/7')
+
+    await user.click(await screen.findByRole('tab', { name: /invitations/i }))
+    await user.click(screen.getByRole('button', { name: 'Review answers' }))
+
+    expect(await screen.findByRole('heading', { name: 'Amélie Dubois' })).toBeInTheDocument()
+    expect(screen.getByText('Use exponential backoff.')).toBeInTheDocument()
+    expect(screen.getByText(question.referenceAnswer)).toBeInTheDocument()
+    expect(screen.getByText('Retry · Fail fast')).toBeInTheDocument()
+    expect(screen.getByText('Unanswered')).toBeInTheDocument()
+    expect(screen.getByText('The retry loop needs a maximum.')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Code changes' })).toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith('/api/jobs/7/invitations/44', expect.any(Object))
+  })
+
+  it('renders code review lines and a review comment without exposing the reference answer', async () => {
+    const now = new Date()
+    const codeQuestion = {
+      ...question,
+      id: 20,
+      type: 'code_review' as const,
+      text: 'Review this change',
+      codeSnippet: ['func total() int {', '+  return 42', '}'].join('\n'),
+      referenceAnswer: 'The hard-coded value should be replaced.',
+    }
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      const path = String(input)
+      if (path === '/api/interviews/code-token')
+        return response({
+          invitation: {
+            id: 32,
+            jobId: 7,
+            participantId: 3,
+            participantName: 'Amélie Dubois',
+            participantEmail: 'amelie@example.com',
+            token: 'code-token',
+            status: 'accepted',
+            participantUrl: 'https://example.test/participant/code-token',
+            acceptedAt: now.toISOString(),
+            completedAt: null,
+            createdAt: now.toISOString(),
+          },
+          job: {
+            id: 7,
+            title: job.title,
+            description: job.description,
+            position: job.position,
+            seniority: job.seniority,
+            durationMinutes: 10,
+            questions: [codeQuestion],
+          },
+          answers: {},
+        })
+      throw new Error(`Unexpected request: ${path}`)
+    })
+
+    const { container } = renderApp('/participant/code-token')
+
+    expect(await screen.findByRole('region', { name: 'Code changes' })).toBeInTheDocument()
+    expect(container.querySelectorAll('.code-line')).toHaveLength(3)
+    expect(container.querySelector('.code-line.added code')?.textContent).toBe('+  return 42')
+    expect(screen.getByRole('textbox', { name: 'Review comment' })).toBeInTheDocument()
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
+    expect(screen.queryByText(codeQuestion.referenceAnswer)).not.toBeInTheDocument()
   })
 })

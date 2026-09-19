@@ -147,7 +147,8 @@ func (s *Store) CreateQuestion(ctx context.Context, value servicemodel.Question)
 	}
 	entity := dbmodel.Question{
 		Text: value.Text, Type: value.Type, Options: options,
-		ReferenceAnswer: value.ReferenceAnswer, Deprecated: value.Deprecated,
+		CodeSnippet: value.CodeSnippet, ReferenceAnswer: value.ReferenceAnswer,
+		Deprecated: value.Deprecated,
 	}
 	if err := s.db.WithContext(ctx).Create(&entity).Error; err != nil {
 		return servicemodel.Question{}, mapError(err)
@@ -159,7 +160,8 @@ func (s *Store) UpdateQuestion(ctx context.Context, id uint, value servicemodel.
 	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		result := tx.Model(&dbmodel.Question{}).Where("id = ?", id).
 			Updates(map[string]any{
-				"text": value.Text, "type": value.Type, "reference_answer": value.ReferenceAnswer,
+				"text": value.Text, "type": value.Type, "code_snippet": value.CodeSnippet,
+				"reference_answer": value.ReferenceAnswer,
 			})
 		if result.Error != nil {
 			return result.Error

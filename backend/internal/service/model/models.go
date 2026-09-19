@@ -34,6 +34,7 @@ type Question struct {
 	Text            string
 	Type            string
 	Options         []string
+	CodeSnippet     string
 	ReferenceAnswer string
 	Deprecated      bool
 }

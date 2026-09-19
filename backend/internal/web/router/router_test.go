@@ -64,6 +64,9 @@ func (invitationStub) List(context.Context, uint) ([]model.Invitation, error) { 
 func (invitationStub) Create(context.Context, uint, uint) (model.Invitation, error) {
 	return model.Invitation{}, nil
 }
+func (invitationStub) Review(context.Context, uint, uint) (model.Interview, error) {
+	return model.Interview{}, nil
+}
 func (invitationStub) GetInterview(context.Context, string) (model.Interview, error) {
 	return model.Interview{}, nil
 }

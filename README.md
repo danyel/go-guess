@@ -66,9 +66,11 @@ repository maps service models to GORM entities and persists them in PostgreSQL.
 
 The React application uses a typed API client and routes for authentication, job
 postings, the searchable question library, participants, candidate matches, and
-invitations. Public `/interview/:token` routes provide the participant welcome,
-timed question navigation, autosaved answers, and completion flow without requiring
-an interviewer login. Vite proxies `/api` to the Go service during local development.
+invitations. Public `/participant/:invitationId` routes provide an acceptance-gated
+welcome screen, timed question navigation, autosaved answers, progress, and
+submission without requiring an interviewer login. Interviewers can review every
+saved answer from the job's invitation list. Vite proxies `/api` to the Go service
+during local development.
 
 Goose migrations in `backend/migrations` are the schema source of truth and include
 representative local data. Uploaded CVs are stored as bytes; plain text, PDF, and
@@ -83,4 +85,5 @@ can only be generated for matching participants on published jobs.
 Open and code-review questions store an interviewer-only reference answer.
 Multiple-choice and radio questions instead store a list of possible responses.
 Reference answers are deliberately omitted from the public participant interview
-payload.
+payload. Code-review questions also store a participant-visible code snippet that
+is presented with line numbers in a pull-request-style review panel.

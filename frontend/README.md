@@ -36,8 +36,9 @@ Supported routes:
 - `POST|DELETE /api/jobs/:id/questions/:questionId`
 - `GET /api/jobs/:id/candidates`
 - `GET|POST /api/jobs/:id/invitations`
+- `GET /api/jobs/:jobId/invitations/:invitationId` for protected answer review
 - `GET|POST /api/questions` (`GET` accepts `?search=`)
-- `PUT /api/questions/:id` to update question text, type, options, and reference answer
+- `PUT /api/questions/:id` to update question text, type, options, reference answer, and code snippet
 - `PATCH /api/questions/:id` to deprecate or restore a question
 - `GET|POST /api/participants`
 - `GET /api/participants/:id`
@@ -54,16 +55,22 @@ Participant creation uses multipart fields `firstName`, `lastName`, `birthday`, 
 ## Interview workflow
 
 Authenticated interviewers create and edit reusable questions at `/questions`, configure job
-status and duration, attach active library questions, and issue participant invitations from a job
-detail page. Multiple-choice and radio questions require at least two explicitly added options.
+status and duration, attach active library questions, and generate invitations for each eligible
+participant from a job detail page. Multiple-choice and radio questions require at least two
+explicitly added options.
 Detaching a question removes only the job association; questions can be deprecated but not deleted.
 Open-answer and code-review questions include an interviewer-only reference answer that is never
-rendered in the participant interview.
+rendered in the participant interview. Code-review questions also require a code snippet.
+Accepted and completed invitations can be opened from the job to review every participant answer,
+possible choice options, reference answers, and code-review context; unanswered questions are
+called out explicitly.
 
-Participants open the generated `/interview/:token` URL without signing in. The invitation token
-authorizes the public interview API. Answers are saved when navigating between questions or
-finishing, and the countdown is derived from the backend `acceptedAt` timestamp plus the job
-duration so refreshing cannot reset it.
+Participants open the generated `/participant/:invitationId` URL without signing in. The opaque
+invitation ID authorizes the existing `/api/interviews/:token` API. Code-review questions are shown
+in a pull-request-style code panel with a review comment field. Answers are saved when navigating
+between questions and as they change, then **Submit** completes the interview. The countdown is
+derived from the backend `acceptedAt` timestamp plus the job duration so refreshing cannot reset
+it. Questions stay hidden until the participant explicitly accepts the invitation.
 
 ## Container
 

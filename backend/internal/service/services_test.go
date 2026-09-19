@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/danyel/go-guess/backend/internal/database/repository"
 	"github.com/danyel/go-guess/backend/internal/service/model"
 )
 
@@ -17,8 +18,9 @@ type fakeStore struct {
 
 type invitationStore struct {
 	*fakeStore
-	interview model.Interview
-	saved     bool
+	interview   model.Interview
+	invitations []model.Invitation
+	saved       bool
 }
 
 func (f *invitationStore) CreateInvitation(_ context.Context, value model.Invitation) (model.Invitation, error) {
@@ -31,6 +33,9 @@ func (f *invitationStore) GetInterview(context.Context, string) (model.Interview
 func (f *invitationStore) SaveAnswer(context.Context, string, uint, string) error {
 	f.saved = true
 	return nil
+}
+func (f *invitationStore) ListInvitations(context.Context, uint) ([]model.Invitation, error) {
+	return f.invitations, nil
 }
 
 func (f *fakeStore) FindUserByEmail(context.Context, string) (model.User, error) {
@@ -178,5 +183,27 @@ func TestQuestionReferenceAnswerValidation(t *testing.T) {
 	}
 	if question.ReferenceAnswer != "" || question.Options[0] != "One" {
 		t.Fatalf("unexpected normalized question: %#v", question)
+	}
+
+	if _, err := service.Create(context.Background(), model.Question{
+		Text: "Review this change", Type: "code_review", ReferenceAnswer: "Spot the race",
+	}); !errors.Is(err, ErrInvalidQuestion) {
+		t.Fatalf("expected missing code snippet error, got %v", err)
+	}
+}
+
+func TestInvitationReviewIsScopedToJob(t *testing.T) {
+	store := &invitationStore{
+		fakeStore:   &fakeStore{},
+		invitations: []model.Invitation{{ID: 3, JobID: 8, Token: "opaque-token"}},
+		interview:   model.Interview{Invitation: model.Invitation{ID: 3, JobID: 8}},
+	}
+	service := NewInvitationService(store, "")
+	review, err := service.Review(context.Background(), 8, 3)
+	if err != nil || review.Invitation.ID != 3 {
+		t.Fatalf("expected invitation review, got %#v, %v", review, err)
+	}
+	if _, err := service.Review(context.Background(), 8, 4); !errors.Is(err, repository.ErrNotFound) {
+		t.Fatalf("expected missing invitation error, got %v", err)
 	}
 }

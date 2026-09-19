@@ -46,8 +46,9 @@ func questionsToService(values []dbmodel.Question) []servicemodel.Question {
 		}
 		result[i] = servicemodel.Question{
 			ID: value.ID, Text: value.Text, Type: value.Type,
-			Options: options, ReferenceAnswer: value.ReferenceAnswer,
-			Deprecated: value.Deprecated,
+			Options: options, CodeSnippet: value.CodeSnippet,
+			ReferenceAnswer: value.ReferenceAnswer,
+			Deprecated:      value.Deprecated,
 		}
 	}
 	return result

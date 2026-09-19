@@ -17,6 +17,7 @@ export interface Question {
   type: QuestionType
   options: string[]
   referenceAnswer: string
+  codeSnippet: string
   deprecated: boolean
 }
 
@@ -85,7 +86,10 @@ export type CreateJobInput = Omit<
   Job,
   'id' | 'questions' | 'createdAt' | 'status' | 'durationMinutes'
 >
-export type CreateQuestionInput = Pick<Question, 'text' | 'type' | 'options' | 'referenceAnswer'>
+export type CreateQuestionInput = Pick<
+  Question,
+  'text' | 'type' | 'options' | 'referenceAnswer' | 'codeSnippet'
+>
 export interface CreateParticipantInput {
   firstName: string
   lastName: string

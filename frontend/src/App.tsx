@@ -759,24 +759,22 @@ function InvitationsView({
   invitations: Invitation[]
   onInvited: (invitation: Invitation) => void
 }) {
-  const [participantId, setParticipantId] = useState('')
-  const [sending, setSending] = useState(false)
+  const [sendingId, setSendingId] = useState<number>()
+  const [review, setReview] = useState<Interview>()
+  const [reviewingId, setReviewingId] = useState<number>()
   const [error, setError] = useState('')
   const invitedIds = new Set(invitations.map((invitation) => invitation.participantId))
   const eligible = matches.filter((match) => !invitedIds.has(match.participant.id))
 
-  async function send(event: FormEvent) {
-    event.preventDefault()
-    if (!participantId) return
-    setSending(true)
+  async function send(participantId: number) {
+    setSendingId(participantId)
     setError('')
     try {
-      onInvited(await api.jobs.invite(job.id, Number(participantId)))
-      setParticipantId('')
+      onInvited(await api.jobs.invite(job.id, participantId))
     } catch (requestError) {
       setError(errorMessage(requestError))
     } finally {
-      setSending(false)
+      setSendingId(undefined)
     }
   }
 
@@ -788,6 +786,18 @@ function InvitationsView({
     }
   }
 
+  async function reviewAnswers(invitationId: number) {
+    setReviewingId(invitationId)
+    setError('')
+    try {
+      setReview(await api.jobs.invitation(job.id, invitationId))
+    } catch (requestError) {
+      setError(errorMessage(requestError))
+    } finally {
+      setReviewingId(undefined)
+    }
+  }
+
   return (
     <section className="card">
       <div className="section-heading">
@@ -796,26 +806,29 @@ function InvitationsView({
           <p>Invite an eligible candidate and share their private participant URL.</p>
         </div>
       </div>
-      <form className="invite-form" onSubmit={send}>
-        <FormField label="Eligible candidate" htmlFor="eligible-candidate">
-          <select
-            id="eligible-candidate"
-            value={participantId}
-            onChange={(event) => setParticipantId(event.target.value)}
-            required
-          >
-            <option value="">Select a candidate</option>
-            {eligible.map(({ participant }) => (
-              <option value={participant.id} key={participant.id}>
-                {participant.firstName} {participant.lastName} — {participant.email}
-              </option>
-            ))}
-          </select>
-        </FormField>
-        <button className="button primary" type="submit" disabled={sending || !participantId}>
-          <Send size={16} /> {sending ? 'Sending…' : 'Send invitation'}
-        </button>
-      </form>
+      <div className="eligible-list">
+        {eligible.map(({ participant }) => (
+          <article className="eligible-row" key={participant.id}>
+            <Avatar person={participant} />
+            <div>
+              <strong>
+                {participant.firstName} {participant.lastName}
+              </strong>
+              <small>{participant.email}</small>
+            </div>
+            <button
+              className="button primary"
+              type="button"
+              disabled={sendingId === participant.id}
+              onClick={() => void send(participant.id)}
+            >
+              <Send size={16} />{' '}
+              {sendingId === participant.id ? 'Generating…' : 'Generate invitation'}
+            </button>
+          </article>
+        ))}
+        {!eligible.length && <p className="muted">All eligible candidates have been invited.</p>}
+      </div>
       {error && <ErrorAlert message={error} />}
       <div className="invitation-list">
         {invitations.map((invitation) => (
@@ -834,11 +847,83 @@ function InvitationsView({
             >
               <Copy size={16} /> Copy URL
             </button>
+            {['accepted', 'completed'].includes(invitation.status) && (
+              <button
+                className="button secondary"
+                type="button"
+                disabled={reviewingId === invitation.id}
+                onClick={() => void reviewAnswers(invitation.id)}
+              >
+                {reviewingId === invitation.id ? 'Loading…' : 'Review answers'}
+              </button>
+            )}
           </article>
         ))}
         {!invitations.length && (
           <EmptyState title="No invitations" description="Invite a candidate to this interview." />
         )}
+      </div>
+      {review && <InvitationAnswerReview interview={review} onClose={() => setReview(undefined)} />}
+    </section>
+  )
+}
+
+function InvitationAnswerReview({
+  interview,
+  onClose,
+}: {
+  interview: Interview
+  onClose: () => void
+}) {
+  return (
+    <section className="answer-review" aria-labelledby="answer-review-title">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">Participant submission</span>
+          <h2 id="answer-review-title">{interview.invitation.participantName}</h2>
+          <p>{interview.invitation.participantEmail}</p>
+        </div>
+        <div className="review-heading-actions">
+          <StatusBadge value={interview.invitation.status} />
+          <button className="button ghost" type="button" onClick={onClose}>
+            Close review
+          </button>
+        </div>
+      </div>
+      <div className="review-question-list">
+        {interview.job.questions.map((question, index) => {
+          const answer = interview.answers[String(question.id)]?.trim()
+          return (
+            <article className="review-question" key={question.id}>
+              <span className="question-number">{index + 1}</span>
+              <div>
+                <span className="question-type">{question.type.replace('_', ' ')}</span>
+                <h3>{question.text}</h3>
+                {question.type === 'code_review' && question.codeSnippet && (
+                  <CodePanel codeSnippet={question.codeSnippet} />
+                )}
+                {(question.type === 'multiple_choice' || question.type === 'radio') &&
+                  question.options.length > 0 && (
+                    <div className="review-options">
+                      <strong>Possible options</strong>
+                      <span>{question.options.join(' · ')}</span>
+                    </div>
+                  )}
+                {(question.type === 'open' || question.type === 'code_review') &&
+                  question.referenceAnswer && (
+                    <div className="reference-answer">
+                      <strong>Reference answer</strong>
+                      <p>{question.referenceAnswer}</p>
+                    </div>
+                  )}
+                <div className={answer ? 'participant-answer' : 'participant-answer unanswered'}>
+                  <strong>Participant answer</strong>
+                  <p>{answer || 'Unanswered'}</p>
+                </div>
+              </div>
+            </article>
+          )
+        })}
       </div>
     </section>
   )
@@ -863,6 +948,11 @@ function QuestionRow({
         </div>
         <p>{question.text}</p>
         {question.options.length > 0 && <small>{question.options.join(' · ')}</small>}
+        {question.type === 'code_review' && question.codeSnippet && (
+          <pre className="interviewer-code-snippet">
+            <code>{question.codeSnippet}</code>
+          </pre>
+        )}
         {question.referenceAnswer && (
           <div className="reference-answer">
             <strong>Reference answer</strong>
@@ -1066,6 +1156,9 @@ function QuestionForm({
       : [],
   )
   const [referenceAnswer, setReferenceAnswer] = useState(initialQuestion?.referenceAnswer ?? '')
+  const [codeSnippet, setCodeSnippet] = useState(
+    initialQuestion?.type === 'code_review' ? initialQuestion.codeSnippet : '',
+  )
   const [optionDraft, setOptionDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -1080,6 +1173,7 @@ function QuestionForm({
     } else {
       setReferenceAnswer('')
     }
+    if (nextType !== 'code_review') setCodeSnippet('')
   }
 
   function addOption() {
@@ -1104,6 +1198,7 @@ function QuestionForm({
         type,
         options: choiceType ? options : [],
         referenceAnswer: choiceType ? '' : referenceAnswer.trim(),
+        codeSnippet: type === 'code_review' ? codeSnippet : '',
       })
       if (!initialQuestion) {
         setText('')
@@ -1111,6 +1206,7 @@ function QuestionForm({
         setOptions([])
         setOptionDraft('')
         setReferenceAnswer('')
+        setCodeSnippet('')
       }
     } catch (requestError) {
       setError(errorMessage(requestError))
@@ -1145,6 +1241,17 @@ function QuestionForm({
             <option value="code_review">Code review</option>
           </select>
         </FormField>
+        {type === 'code_review' && (
+          <FormField label="Code snippet" htmlFor="question-form-code-snippet">
+            <textarea
+              id="question-form-code-snippet"
+              rows={12}
+              value={codeSnippet}
+              onChange={(event) => setCodeSnippet(event.target.value)}
+              required
+            />
+          </FormField>
+        )}
         {!choiceType && (
           <FormField
             label={type === 'code_review' ? 'Expected answer' : 'Reference answer'}
@@ -1727,8 +1834,57 @@ function EmptyState({ title, description }: { title: string; description: string
   )
 }
 
+function CodePanel({ codeSnippet }: { codeSnippet: string }) {
+  return (
+    <section className="code-review-panel" aria-label="Code changes">
+      <header>
+        <FileText size={17} />
+        <strong>Code changes</strong>
+      </header>
+      <div className="code-lines">
+        {codeSnippet.split('\n').map((line, index) => {
+          const added = line.startsWith('+') && !line.startsWith('+++')
+          return (
+            <div className={added ? 'code-line added' : 'code-line'} key={index}>
+              <span className="line-number" aria-hidden="true">
+                {index + 1}
+              </span>
+              <code>{line || ' '}</code>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
+function CodeReviewAnswer({
+  codeSnippet,
+  answer,
+  onChange,
+}: {
+  codeSnippet: string
+  answer: string
+  onChange: (answer: string) => void
+}) {
+  return (
+    <div className="code-review-answer">
+      <CodePanel codeSnippet={codeSnippet} />
+      <FormField label="Review comment" htmlFor="review-comment">
+        <textarea
+          id="review-comment"
+          rows={7}
+          value={answer}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Describe issues, suggestions, and approval notes…"
+        />
+      </FormField>
+    </div>
+  )
+}
+
 function ParticipantInterviewPage() {
-  const token = useParams().token ?? ''
+  const token = useParams().invitationId ?? ''
   const [interview, setInterview] = useState<Interview>()
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [index, setIndex] = useState(0)
@@ -1737,6 +1893,7 @@ function ParticipantInterviewPage() {
   const [working, setWorking] = useState(false)
   const [error, setError] = useState('')
   const finishing = useRef(false)
+  const saveQueues = useRef<Record<string, Promise<void>>>({})
 
   useEffect(() => {
     let active = true
@@ -1788,13 +1945,21 @@ function ParticipantInterviewPage() {
   const questions = interview?.job.questions ?? []
   const currentQuestion = questions[index]
 
+  function updateAnswer(questionId: number, answer: string) {
+    const key = String(questionId)
+    setAnswers((current) => ({ ...current, [key]: answer }))
+    setError('')
+    const previous = saveQueues.current[key] ?? Promise.resolve()
+    saveQueues.current[key] = previous
+      .then(() => api.interviews.answer(token, questionId, answer))
+      .catch((requestError) => {
+        setError(errorMessage(requestError))
+      })
+  }
+
   async function persistCurrent() {
     if (!currentQuestion) return
-    await api.interviews.answer(
-      token,
-      currentQuestion.id,
-      answers[String(currentQuestion.id)] ?? '',
-    )
+    await saveQueues.current[String(currentQuestion.id)]
   }
 
   async function move(target: number) {
@@ -1868,6 +2033,9 @@ function ParticipantInterviewPage() {
           <h1>Welcome, {interview.invitation.participantName}</h1>
           <h2>{interview.job.title}</h2>
           <p>{interview.job.description}</p>
+          <p className="agreement-copy">
+            By accepting, you agree to begin the timed interview and submit your responses.
+          </p>
           <div className="welcome-facts">
             <span>
               <Clock3 size={18} /> {interview.job.durationMinutes} minutes
@@ -1878,7 +2046,7 @@ function ParticipantInterviewPage() {
           </div>
           {error && <ErrorAlert message={error} />}
           <button className="button primary" type="button" disabled={working} onClick={accept}>
-            {working ? 'Starting…' : 'Accept and start'}
+            {working ? 'Accepting…' : 'Accept'}
             <ArrowRight size={18} />
           </button>
         </section>
@@ -1946,12 +2114,7 @@ function ParticipantInterviewPage() {
                     type="radio"
                     name={`question-${currentQuestion.id}`}
                     checked={answer === option}
-                    onChange={() =>
-                      setAnswers((current) => ({
-                        ...current,
-                        [String(currentQuestion.id)]: option,
-                      }))
-                    }
+                    onChange={() => updateAnswer(currentQuestion.id, option)}
                   />
                   {option}
                 </label>
@@ -1969,29 +2132,27 @@ function ParticipantInterviewPage() {
                       const next = event.target.checked
                         ? [...selectedOptions, option]
                         : selectedOptions.filter((item) => item !== option)
-                      setAnswers((current) => ({
-                        ...current,
-                        [String(currentQuestion.id)]: next.join('\n'),
-                      }))
+                      updateAnswer(currentQuestion.id, next.join('\n'))
                     }}
                   />
                   {option}
                 </label>
               ))}
             </fieldset>
+          ) : currentQuestion.type === 'code_review' ? (
+            <CodeReviewAnswer
+              codeSnippet={currentQuestion.codeSnippet}
+              answer={answer}
+              onChange={(value) => updateAnswer(currentQuestion.id, value)}
+            />
           ) : (
             <label>
               <span className="sr-only">Your answer</span>
               <textarea
                 aria-label="Your answer"
-                rows={currentQuestion.type === 'code_review' ? 12 : 7}
+                rows={7}
                 value={answer}
-                onChange={(event) =>
-                  setAnswers((current) => ({
-                    ...current,
-                    [String(currentQuestion.id)]: event.target.value,
-                  }))
-                }
+                onChange={(event) => updateAnswer(currentQuestion.id, event.target.value)}
                 placeholder="Type your answer…"
               />
             </label>
@@ -2037,7 +2198,7 @@ function ParticipantInterviewPage() {
             disabled={working}
             onClick={() => void finish()}
           >
-            Finish
+            Submit
           </button>
         </footer>
       </section>
@@ -2083,10 +2244,10 @@ export default function App() {
     authStorage.clear()
     setAuthenticated(false)
   }
-  if (location.pathname.startsWith('/interview/')) {
+  if (location.pathname.startsWith('/participant/')) {
     return (
       <Routes>
-        <Route path="/interview/:token" element={<ParticipantInterviewPage />} />
+        <Route path="/participant/:invitationId" element={<ParticipantInterviewPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
     )

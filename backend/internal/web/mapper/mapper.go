@@ -19,7 +19,7 @@ func JobToService(value webmodel.JobRequest) servicemodel.JobPosting {
 func QuestionToService(value webmodel.QuestionRequest) servicemodel.Question {
 	return servicemodel.Question{
 		Text: value.Text, Type: value.Type, Options: value.Options,
-		ReferenceAnswer: value.ReferenceAnswer,
+		CodeSnippet: value.CodeSnippet, ReferenceAnswer: value.ReferenceAnswer,
 	}
 }
 
@@ -41,7 +41,8 @@ func JobToWeb(value servicemodel.JobPosting) webmodel.JobResponse {
 func QuestionToWeb(value servicemodel.Question) webmodel.QuestionResponse {
 	return webmodel.QuestionResponse{
 		ID: value.ID, Text: value.Text, Type: value.Type, Options: value.Options,
-		ReferenceAnswer: value.ReferenceAnswer, Deprecated: value.Deprecated,
+		CodeSnippet: value.CodeSnippet, ReferenceAnswer: value.ReferenceAnswer,
+		Deprecated: value.Deprecated,
 	}
 }
 
@@ -76,7 +77,7 @@ func InvitationToWeb(value servicemodel.Invitation, frontendURL string) webmodel
 		ID: value.ID, JobID: value.JobID, ParticipantID: value.ParticipantID,
 		ParticipantName: value.ParticipantName, ParticipantEmail: value.ParticipantEmail,
 		Token: value.Token, Status: value.Status,
-		ParticipantURL: frontendURL + "/interview/" + value.Token,
+		ParticipantURL: frontendURL + "/participant/" + value.Token,
 		AcceptedAt:     value.AcceptedAt, CompletedAt: value.CompletedAt, CreatedAt: value.CreatedAt,
 	}
 }
@@ -85,7 +86,8 @@ func InterviewToWeb(value servicemodel.Interview, frontendURL string) webmodel.I
 	questions := make([]webmodel.InterviewQuestionResponse, len(value.Job.Questions))
 	for i, question := range value.Job.Questions {
 		questions[i] = webmodel.InterviewQuestionResponse{
-			ID: question.ID, Text: question.Text, Type: question.Type, Options: question.Options,
+			ID: question.ID, Text: question.Text, Type: question.Type,
+			Options: question.Options, CodeSnippet: question.CodeSnippet,
 		}
 	}
 	return webmodel.InterviewResponse{
@@ -96,6 +98,14 @@ func InterviewToWeb(value servicemodel.Interview, frontendURL string) webmodel.I
 			DurationMinutes: value.Job.DurationMinutes, Questions: questions,
 		},
 		Answers: value.Answers,
+	}
+}
+
+func InvitationReviewToWeb(value servicemodel.Interview, frontendURL string) webmodel.InvitationReviewResponse {
+	return webmodel.InvitationReviewResponse{
+		Invitation: InvitationToWeb(value.Invitation, frontendURL),
+		Job:        JobToWeb(value.Job),
+		Answers:    value.Answers,
 	}
 }
 

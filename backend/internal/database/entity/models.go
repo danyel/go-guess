@@ -38,6 +38,7 @@ type Question struct {
 	ID              uint             `gorm:"primaryKey"`
 	Text            string           `gorm:"type:text;not null"`
 	Type            string           `gorm:"size:32;not null"`
+	CodeSnippet     string           `gorm:"type:text;not null;default:''"`
 	ReferenceAnswer string           `gorm:"type:text;not null;default:''"`
 	Deprecated      bool             `gorm:"not null;default:false"`
 	Options         []QuestionOption `gorm:"foreignKey:QuestionID;constraint:OnDelete:CASCADE"`

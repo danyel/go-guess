@@ -317,6 +317,14 @@ func (h *Handler) CreateInvitation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, webmapper.InvitationToWeb(value, h.frontendURL))
 }
 
+func (h *Handler) ReviewInvitation(w http.ResponseWriter, r *http.Request) {
+	value, err := h.invitations.Review(r.Context(), idParam(r), secondaryIDParam(r, "invitationId"))
+	if handleServiceError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, webmapper.InvitationReviewToWeb(value, h.frontendURL))
+}
+
 func (h *Handler) GetInterview(w http.ResponseWriter, r *http.Request) {
 	value, err := h.invitations.GetInterview(r.Context(), chi.URLParam(r, "token"))
 	if handleServiceError(w, r, err) {

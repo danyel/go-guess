@@ -117,6 +117,8 @@ export const api = {
       request<void>(`/jobs/${jobId}/questions/${questionId}`, { method: 'DELETE' }),
     candidates: (jobId: number) => request<CandidateMatch[]>(`/jobs/${jobId}/candidates`),
     invitations: (jobId: number) => request<Invitation[]>(`/jobs/${jobId}/invitations`),
+    invitation: (jobId: number, invitationId: number) =>
+      request<Interview>(`/jobs/${jobId}/invitations/${invitationId}`),
     invite: (jobId: number, participantId: number) =>
       request<Invitation>(`/jobs/${jobId}/invitations`, {
         method: 'POST',
