@@ -1,4 +1,4 @@
-import { Check, UsersRound, X } from 'lucide-react'
+import { Check, Copy, UsersRound, X } from 'lucide-react'
 import { type FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api, ApiError } from '../../api/client'
@@ -145,6 +145,7 @@ export function ScheduledInterviewPage() {
   const [notes, setNotes] = useState<ScheduledInterview['notes']>([])
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -218,6 +219,16 @@ export function ScheduledInterviewPage() {
     }
   }
 
+  async function copyParticipantLink(url: string) {
+    setError('')
+    try {
+      await navigator.clipboard.writeText(url)
+      setLinkCopied(true)
+    } catch {
+      setError('Could not copy the participant interview link')
+    }
+  }
+
   if (!interview && !error) return <Loading />
   if (!interview) return <ErrorAlert error={error} />
   return (
@@ -236,6 +247,15 @@ export function ScheduledInterviewPage() {
       {error && <ErrorAlert error={error} />}
       <DateAndPlace interview={interview} />
       <div className="session-actions">
+        <button
+          className="button secondary"
+          type="button"
+          onClick={() => void copyParticipantLink(interview.candidateUrl)}
+          aria-label="Copy participant interview link"
+        >
+          {linkCopied ? <Check size={17} /> : <Copy size={17} />}
+          {linkCopied ? 'Link copied' : 'Copy participant link'}
+        </button>
         {interview.status !== 'started' && interview.status !== 'completed' && (
           <button
             className="button primary"

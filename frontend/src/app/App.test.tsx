@@ -814,6 +814,7 @@ describe('Go Guess frontend', () => {
   it('edits shared documentation and displays notes received over authenticated fetch streaming', async () => {
     authenticate()
     const user = userEvent.setup()
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText')
     const scheduled = {
       id: 80,
       jobId: 7,
@@ -866,6 +867,11 @@ describe('Go Guess frontend', () => {
     })
     renderApp('/scheduled-interviews/80')
     expect(await screen.findByText('Strong system design answer.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copy participant interview link' }))
+    expect(writeText).toHaveBeenCalledWith('/participant/meeting/meeting-token')
+    expect(
+      screen.getByRole('button', { name: 'Copy participant interview link' }),
+    ).toHaveTextContent('Link copied')
     const document = screen.getByLabelText('Shared documentation')
     await user.clear(document)
     await user.type(document, 'Updated candidate exercise')
