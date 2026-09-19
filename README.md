@@ -56,7 +56,7 @@ cd backend && go test ./internal/service -run '^TestCandidatesRequireSixtyPercen
 Run one frontend test:
 
 ```bash
-cd frontend && npm test -- src/App.test.tsx -t "filters jobs by title"
+cd frontend && npm test -- src/app/App.test.tsx -t "filters jobs by title"
 ```
 
 Docker must be available for `make test`. The integration suite starts PostgreSQL

@@ -19,7 +19,7 @@ Focused tests:
 ```bash
 cd backend && go test ./internal/service -run '^TestCandidatesRequireSixtyPercent$'
 cd backend && go test -tags=integration ./internal/integration -run '^TestCompleteInterviewWorkflow$'
-cd frontend && npm test -- src/App.test.tsx -t "filters jobs by title"
+cd frontend && npm test -- src/app/App.test.tsx -t "filters jobs by title"
 ```
 
 The required toolchain is Go 1.27.1 and React 19.3 with TypeScript/Vite. Use
@@ -37,9 +37,12 @@ The required toolchain is Go 1.27.1 and React 19.3 with TypeScript/Vite. Use
   `go-guess.interview-notes` RabbitMQ fanout exchange. Each API instance consumes
   through its own exclusive queue and distributes events to authenticated SSE
   subscribers.
-- `frontend/src/App.tsx` owns routing/layout/screens, `src/api.ts` is the typed HTTP
-  boundary, and `src/types.ts` contains client domain types. Vite proxies `/api` to
-  the Go service in development.
+- `frontend/src/app` owns application routing and providers, `src/features` groups
+  feature pages and components, `src/components` contains reusable UI,
+  `src/api/client.ts` is the typed HTTP boundary, `src/types` contains client
+  domain types, and `src/styles/global.css` contains application-wide styles.
+  Keep feature-specific components inside their feature directory. Vite proxies
+  `/api` to the Go service in development.
 
 Goose files in `backend/migrations` are schema-only and run in every environment.
 `internal/database/seed/common.sql` contains shared reference data;

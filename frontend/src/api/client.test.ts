@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, authStorage } from './api'
+import { api, authStorage } from './client'
 
 describe('API client', () => {
   beforeEach(() => {

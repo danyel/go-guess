@@ -953,10 +953,124 @@ td small {
 }
 .schedule-form {
   margin: 1.5rem;
-  border: 2px solid var(--cyan);
-  border-radius: 14px;
+  border: 1px solid #bfdde3;
+  border-radius: 16px;
   overflow: hidden;
   background: white;
+  box-shadow: 0 14px 38px rgba(14, 42, 56, 0.1);
+}
+.schedule-form-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.5rem clamp(1.2rem, 3vw, 2rem);
+  color: white;
+  background: var(--navy);
+}
+.schedule-form-header .eyebrow {
+  color: var(--lime);
+}
+.schedule-form-header h2 {
+  margin: 0.25rem 0 0.35rem;
+  color: white;
+}
+.schedule-form-header p {
+  margin: 0;
+  color: #bcd0d8;
+}
+.schedule-form-header strong {
+  color: white;
+}
+.schedule-form-header .icon-button {
+  flex: 0 0 auto;
+  color: white;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+.schedule-form-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.85fr);
+}
+.schedule-form-details,
+.schedule-team-panel {
+  min-width: 0;
+  padding: clamp(1.25rem, 3vw, 2rem);
+}
+.schedule-team-panel {
+  border-left: 1px solid var(--line);
+  background: #f7fafb;
+}
+.schedule-form-section-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  margin-bottom: 1.25rem;
+}
+.schedule-form-section-heading > svg {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  color: var(--cyan-dark);
+  border-radius: 9px;
+  background: #e8f7f9;
+}
+.schedule-form-section-heading h3 {
+  margin: 0;
+}
+.schedule-form-section-heading p {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+.schedule-form-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 1rem;
+}
+.input-with-icon {
+  position: relative;
+  display: block;
+}
+.input-with-icon > svg {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 0.8rem;
+  width: 17px;
+  color: #78909c;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.input-with-icon > input {
+  padding-left: 2.35rem;
+}
+.schedule-document-field {
+  display: block;
+  margin: 0.3rem 0 0;
+  padding: 1rem;
+  border: 1px solid #b9dce2;
+  border-radius: 12px;
+  background: #f2fbfc;
+}
+.schedule-field-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.75rem;
+}
+.schedule-field-heading > svg {
+  color: var(--cyan-dark);
+}
+.schedule-field-heading > span {
+  display: flex;
+  flex-direction: column;
+}
+.schedule-field-heading small {
+  margin-top: 0.1rem;
+  color: var(--muted);
+  font-weight: 400;
 }
 .scheduled-list {
   display: grid;
@@ -984,37 +1098,76 @@ td small {
   margin-top: 0.2rem;
 }
 .interviewer-picker {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.65rem;
-  margin-bottom: 1.2rem;
-}
-.interviewer-picker legend {
-  margin-bottom: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
 }
 .interviewer-picker label {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
   align-items: center;
-  gap: 0.65rem;
-  padding: 0.75rem;
+  gap: 0.7rem;
+  padding: 0.7rem;
   border: 1px solid var(--line);
-  border-radius: 9px;
+  border-radius: 10px;
+  background: white;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s,
+    box-shadow 0.2s;
+}
+.interviewer-picker label:hover {
+  border-color: #99cad3;
+}
+.interviewer-picker label.selected {
+  border-color: var(--cyan);
+  background: #edf9fa;
+  box-shadow: 0 0 0 2px rgba(0, 169, 200, 0.1);
 }
 .interviewer-picker input {
   width: auto;
+  margin: 0;
 }
-.interviewer-picker span {
+.interviewer-picker .avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 0.7rem;
+}
+.interviewer-details {
   display: flex;
   flex-direction: column;
+  min-width: 0;
 }
-.interviewer-picker small {
+.interviewer-details small {
+  overflow: hidden;
   color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.shared-document-field {
-  padding: 1rem;
-  border: 2px solid var(--cyan);
-  border-radius: 12px;
-  background: #f2fbfc;
+.schedule-team-summary {
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.schedule-form-error {
+  display: flex;
+  gap: 0.4rem;
+  padding: 0.85rem clamp(1.2rem, 3vw, 2rem);
+  color: #8f2929;
+  border-top: 1px solid #f3cccc;
+  background: #fff2f2;
+}
+.schedule-form-error span {
+  color: #a44545;
+}
+.schedule-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem clamp(1.2rem, 3vw, 2rem);
+  border-top: 1px solid var(--line);
+  background: white;
 }
 
 .user-list {
@@ -1868,6 +2021,13 @@ fieldset {
   .people-grid {
     grid-template-columns: 1fr;
   }
+  .schedule-form-layout {
+    grid-template-columns: 1fr;
+  }
+  .schedule-team-panel {
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
 }
 
 @media (max-width: 800px) {
@@ -1981,6 +2141,7 @@ fieldset {
     width: 100%;
   }
   .form-grid,
+  .schedule-form-fields,
   .type-grid {
     grid-template-columns: 1fr;
   }
@@ -2040,8 +2201,17 @@ fieldset {
     flex-direction: column;
     display: flex;
   }
-  .interviewer-picker {
-    grid-template-columns: 1fr;
+  .schedule-form {
+    margin: 1rem;
+  }
+  .schedule-form-header {
+    gap: 0.75rem;
+  }
+  .schedule-form-actions {
+    flex-direction: column-reverse;
+  }
+  .schedule-form-actions .button {
+    width: 100%;
   }
 }
 

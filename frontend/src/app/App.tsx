@@ -43,15 +43,15 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom'
-import { api, ApiError, authStorage } from './api'
+import { api, ApiError, authStorage } from '../api/client'
 import {
   CalendarPage,
   InboxPage,
   ParticipantMeetingPage,
   ScheduleInterviewForm,
   ScheduledInterviewPage,
-  UsersPage,
-} from './interview-workflow'
+} from '../features/interviews'
+import { UsersPage } from '../features/users'
 import type {
   CandidateMatch,
   CreateJobInput,
@@ -65,7 +65,7 @@ import type {
   Question,
   QuestionType,
   ScheduledInterview,
-} from './types'
+} from '../types'
 
 interface AppData {
   jobs: Job[]

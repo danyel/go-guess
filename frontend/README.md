@@ -18,8 +18,20 @@ npm run build
 Run one test:
 
 ```bash
-npm test -- src/App.test.tsx -t "shows answer inputs"
+npm test -- src/app/App.test.tsx -t "filters jobs by title"
 ```
+
+## Source structure
+
+- `src/app` contains the application shell, providers, routes, and route-level tests.
+- `src/features` groups pages and components by business capability.
+- `src/components` contains UI shared by multiple features.
+- `src/api/client.ts` is the typed HTTP boundary.
+- `src/types` contains API and domain types.
+- `src/styles/global.css` contains shared tokens and layout styles.
+
+Keep feature-only UI close to its feature instead of adding more screens to the
+application shell.
 
 ## API integration
 

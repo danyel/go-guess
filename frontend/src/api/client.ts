@@ -15,7 +15,7 @@ import type {
   ScheduledInterview,
   User,
   InterviewNote,
-} from './types'
+} from '../types'
 
 const TOKEN_KEY = 'go-guess-token'
 const USER_KEY = 'go-guess-user'

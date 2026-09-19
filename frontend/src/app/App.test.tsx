@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { BrowserRouter, MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
-import type { Job, Participant } from './types'
+import type { Job, Participant } from '../types'
 
 const question = {
   id: 11,
@@ -680,6 +680,8 @@ describe('Go Guess frontend', () => {
     renderApp('/jobs/7')
     await user.click(await screen.findByRole('tab', { name: /invitations/i }))
     await user.click(screen.getByRole('button', { name: 'Schedule Amélie Dubois' }))
+    expect(screen.getByRole('heading', { name: 'Interview details' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Interview team' })).toBeInTheDocument()
     await user.type(screen.getByLabelText('Date and time'), '2026-09-22T10:30')
     await user.type(screen.getByLabelText('Location or meeting link'), 'Brussels')
     await user.click(await screen.findByLabelText(/Alex Morgan/))
