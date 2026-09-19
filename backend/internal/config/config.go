@@ -14,6 +14,7 @@ type Config struct {
 	TokenTTL    time.Duration
 	MaxUploadMB int64
 	FrontendURL string
+	RabbitMQURL string
 }
 
 func Load() (Config, error) {
@@ -32,6 +33,7 @@ func Load() (Config, error) {
 		TokenTTL:    ttl,
 		MaxUploadMB: maxUploadMB,
 		FrontendURL: env("FRONTEND_URL", "http://localhost:5173"),
+		RabbitMQURL: env("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
 	}
 	if len(cfg.JWTSecret) < 32 {
 		return Config{}, fmt.Errorf("JWT_SECRET must contain at least 32 characters")

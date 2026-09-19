@@ -3,13 +3,14 @@
 Recruitment workspace for interviewers to define job profiles and a reusable
 question library, manage participants, extract known traits from uploaded CVs,
 invite candidates who match at least 60% of a posting's labels and skills, and run
-timed participant interviews.
+timed assessments followed by collaborative interviews.
 
 ## Stack
 
 - Go 1.27.1 HTTP API using Chi, GORM, PostgreSQL, Goose, bcrypt, and signed JWTs
 - React 19.3, TypeScript, and Vite
 - PostgreSQL 18
+- RabbitMQ 4 for live interview-note fanout
 
 ## Run locally
 
@@ -40,8 +41,8 @@ outside local development.
 ## Quality commands
 
 ```bash
-make test                 # full suite, including disposable PostgreSQL integration tests
-make test-integration     # Go integration suite with its own PostgreSQL container
+make test                 # full suite, including disposable infrastructure integration tests
+make test-integration     # Go integration suite with PostgreSQL and RabbitMQ containers
 make lint
 make build
 ```
@@ -59,9 +60,10 @@ cd frontend && npm test -- src/App.test.tsx -t "filters jobs by title"
 ```
 
 Docker must be available for `make test`. The integration suite starts PostgreSQL
-18 in a disposable Testcontainer, applies every Goose migration, loads deterministic
-test fixtures, exercises login and the complete interview workflow, and removes the
-container afterward.
+18 and RabbitMQ 4 in disposable Testcontainers, applies every Goose migration,
+loads deterministic test fixtures, exercises login and the complete assessment and
+interview workflow, verifies live note fanout, and removes both containers
+afterward.
 
 Start an isolated application stack populated with test data for manual UI testing:
 
@@ -85,6 +87,19 @@ welcome screen, timed question navigation, autosaved answers, progress, and
 submission without requiring an interviewer login. Interviewers can review every
 saved answer from the job's invitation list. Vite proxies `/api` to the Go service
 during local development.
+
+Completed assessments can be marked passed or failed. A passed candidate can be
+scheduled for an interview with a date, location or meeting link, shared document,
+and selected co-interviewers. Each interviewer has an inbox for invitations and a
+calendar for accepted interviews. During a started interview, attendees can add
+private notes; the API persists each note and publishes it through a durable
+RabbitMQ fanout exchange so connected interviewer sessions receive it over an
+authenticated server-sent-event stream. The candidate receives a separate opaque
+meeting link that exposes the schedule and shared document, but never private notes
+or assessment reference answers.
+
+Development fixtures include `co-interviewer@go-guess.local` with password
+`admin123`. Additional co-interviewers can be created from the Users screen.
 
 Goose migrations in `backend/migrations` are schema-only and run in every
 environment. Embedded SQL under `backend/internal/database/seed` separates shared

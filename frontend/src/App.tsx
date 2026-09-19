@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   ArrowRight,
   BriefcaseBusiness,
+  CalendarDays,
   Check,
   ChevronRight,
   CircleHelp,
@@ -15,6 +16,7 @@ import {
   Plus,
   Search,
   Send,
+  Inbox,
   Sparkles,
   Trash2,
   Upload,
@@ -42,6 +44,14 @@ import {
   useParams,
 } from 'react-router-dom'
 import { api, ApiError, authStorage } from './api'
+import {
+  CalendarPage,
+  InboxPage,
+  ParticipantMeetingPage,
+  ScheduleInterviewForm,
+  ScheduledInterviewPage,
+  UsersPage,
+} from './interview-workflow'
 import type {
   CandidateMatch,
   CreateJobInput,
@@ -54,6 +64,7 @@ import type {
   Participant,
   Question,
   QuestionType,
+  ScheduledInterview,
 } from './types'
 
 interface AppData {
@@ -276,6 +287,24 @@ function AppLayout({ onLogout }: { onLogout: () => void }) {
             icon={<CircleHelp size={20} />}
             close={() => setOpen(false)}
           />
+          <NavItem
+            to="/inbox"
+            label="Inbox"
+            icon={<Inbox size={20} />}
+            close={() => setOpen(false)}
+          />
+          <NavItem
+            to="/calendar"
+            label="Calendar"
+            icon={<CalendarDays size={20} />}
+            close={() => setOpen(false)}
+          />
+          <NavItem
+            to="/users"
+            label="Users"
+            icon={<UserRound size={20} />}
+            close={() => setOpen(false)}
+          />
         </nav>
         <div className="sidebar-bottom">
           <div className="user-chip">
@@ -301,6 +330,10 @@ function AppLayout({ onLogout }: { onLogout: () => void }) {
           <Route path="/participants" element={<ParticipantsPage />} />
           <Route path="/participants/new" element={<CreateParticipantPage />} />
           <Route path="/participants/:participantId" element={<ParticipantDetailPage />} />
+          <Route path="/users" element={<UsersPage />} />
+          <Route path="/inbox" element={<InboxPage />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/scheduled-interviews/:id" element={<ScheduledInterviewPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
@@ -458,6 +491,7 @@ function JobDetailPage() {
   const [job, setJob] = useState<Job>()
   const [matches, setMatches] = useState<CandidateMatch[]>([])
   const [invitations, setInvitations] = useState<Invitation[]>([])
+  const [scheduledInterviews, setScheduledInterviews] = useState<ScheduledInterview[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [tab, setTab] = useState<'overview' | 'questions' | 'candidates' | 'invitations'>(
@@ -468,14 +502,16 @@ function JobDetailPage() {
     setLoading(true)
     setError('')
     try {
-      const [jobValue, candidates, invitationItems] = await Promise.all([
+      const [jobValue, candidates, invitationItems, scheduledItems] = await Promise.all([
         api.jobs.get(id),
         api.jobs.candidates(id),
         api.jobs.invitations(id),
+        api.jobs.interviews(id),
       ])
       setJob(jobValue)
       setMatches(candidates)
       setInvitations(invitationItems)
+      setScheduledInterviews(scheduledItems)
     } catch (requestError) {
       setError(errorMessage(requestError))
     } finally {
@@ -484,12 +520,18 @@ function JobDetailPage() {
   }
   useEffect(() => {
     let active = true
-    void Promise.all([api.jobs.get(id), api.jobs.candidates(id), api.jobs.invitations(id)])
-      .then(([jobValue, candidates, invitationItems]) => {
+    void Promise.all([
+      api.jobs.get(id),
+      api.jobs.candidates(id),
+      api.jobs.invitations(id),
+      api.jobs.interviews(id),
+    ])
+      .then(([jobValue, candidates, invitationItems, scheduledItems]) => {
         if (!active) return
         setJob(jobValue)
         setMatches(candidates)
         setInvitations(invitationItems)
+        setScheduledInterviews(scheduledItems)
       })
       .catch((requestError: unknown) => {
         if (active) setError(errorMessage(requestError))
@@ -563,7 +605,14 @@ function JobDetailPage() {
           job={job}
           matches={matches}
           invitations={invitations}
+          scheduledInterviews={scheduledInterviews}
           onInvited={(invitation) => setInvitations((current) => [invitation, ...current])}
+          onInvitationUpdated={(invitation) =>
+            setInvitations((current) =>
+              current.map((item) => (item.id === invitation.id ? invitation : item)),
+            )
+          }
+          onScheduled={(interview) => setScheduledInterviews((current) => [interview, ...current])}
         />
       )}
     </>
@@ -752,17 +801,24 @@ function InvitationsView({
   job,
   matches,
   invitations,
+  scheduledInterviews,
   onInvited,
+  onInvitationUpdated,
+  onScheduled,
 }: {
   job: Job
   matches: CandidateMatch[]
   invitations: Invitation[]
+  scheduledInterviews: ScheduledInterview[]
   onInvited: (invitation: Invitation) => void
+  onInvitationUpdated: (invitation: Invitation) => void
+  onScheduled: (interview: ScheduledInterview) => void
 }) {
   const [sendingId, setSendingId] = useState<number>()
   const [review, setReview] = useState<Interview>()
   const [reviewingId, setReviewingId] = useState<number>()
   const [error, setError] = useState('')
+  const [scheduling, setScheduling] = useState<Invitation>()
   const invitedIds = new Set(invitations.map((invitation) => invitation.participantId))
   const eligible = matches.filter((match) => !invitedIds.has(match.participant.id))
 
@@ -863,7 +919,62 @@ function InvitationsView({
           <EmptyState title="No invitations" description="Invite a candidate to this interview." />
         )}
       </div>
-      {review && <InvitationAnswerReview interview={review} onClose={() => setReview(undefined)} />}
+      {review && (
+        <InvitationAnswerReview
+          interview={review}
+          onClose={() => setReview(undefined)}
+          onOutcome={(invitation) => {
+            onInvitationUpdated(invitation)
+            setReview((current) => current && { ...current, invitation })
+          }}
+        />
+      )}
+      {scheduling && (
+        <ScheduleInterviewForm
+          jobId={job.id}
+          invitation={scheduling}
+          onCancel={() => setScheduling(undefined)}
+          onCreated={(interview) => {
+            onScheduled(interview)
+            setScheduling(undefined)
+          }}
+        />
+      )}
+      <div className="scheduled-list">
+        {invitations
+          .filter((invitation) => invitation.outcome === 'passed')
+          .filter(
+            (invitation) =>
+              !scheduledInterviews.some(
+                (interview) => interview.participantId === invitation.participantId,
+              ),
+          )
+          .map((invitation) => (
+            <button
+              className="button primary"
+              type="button"
+              key={invitation.id}
+              onClick={() => setScheduling(invitation)}
+            >
+              <CalendarDays size={17} /> Schedule {invitation.participantName}
+            </button>
+          ))}
+        {scheduledInterviews.map((interview) => (
+          <Link
+            className="scheduled-summary"
+            to={`/scheduled-interviews/${interview.id}`}
+            key={interview.id}
+          >
+            <span>
+              <strong>{interview.participantName}</strong>
+              <small>
+                {new Date(interview.startsAt).toLocaleString()} · {interview.location}
+              </small>
+            </span>
+            <StatusBadge value={interview.status} />
+          </Link>
+        ))}
+      </div>
     </section>
   )
 }
@@ -871,10 +982,32 @@ function InvitationsView({
 function InvitationAnswerReview({
   interview,
   onClose,
+  onOutcome,
 }: {
   interview: Interview
   onClose: () => void
+  onOutcome: (invitation: Invitation) => void
 }) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  async function decide(outcome: 'passed' | 'failed') {
+    setSaving(true)
+    setError('')
+    try {
+      onOutcome(
+        await api.jobs.setInvitationOutcome(
+          interview.invitation.jobId,
+          interview.invitation.id,
+          outcome,
+        ),
+      )
+    } catch (requestError) {
+      setError(errorMessage(requestError))
+    } finally {
+      setSaving(false)
+    }
+  }
   return (
     <section className="answer-review" aria-labelledby="answer-review-title">
       <div className="section-heading">
@@ -883,6 +1016,32 @@ function InvitationAnswerReview({
           <h2 id="answer-review-title">{interview.invitation.participantName}</h2>
           <p>{interview.invitation.participantEmail}</p>
         </div>
+        {interview.invitation.status === 'completed' && (
+          <div className="outcome-actions" aria-label="Candidate outcome">
+            <div>
+              <strong>Assessment decision</strong>
+              <p>Record whether this candidate should proceed to a scheduled interview.</p>
+            </div>
+            <button
+              className="button pass"
+              type="button"
+              disabled={saving}
+              onClick={() => void decide('passed')}
+            >
+              <Check size={18} /> Pass candidate
+            </button>
+            <button
+              className="button fail"
+              type="button"
+              disabled={saving}
+              onClick={() => void decide('failed')}
+            >
+              <X size={18} /> Fail candidate
+            </button>
+            {interview.invitation.outcome && <StatusBadge value={interview.invitation.outcome} />}
+          </div>
+        )}
+        {error && <ErrorAlert message={error} />}
         <div className="review-heading-actions">
           <StatusBadge value={interview.invitation.status} />
           <button className="button ghost" type="button" onClick={onClose}>
@@ -2247,6 +2406,7 @@ export default function App() {
   if (location.pathname.startsWith('/participant/')) {
     return (
       <Routes>
+        <Route path="/participant/meeting/:token" element={<ParticipantMeetingPage />} />
         <Route path="/participant/:invitationId" element={<ParticipantInterviewPage />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

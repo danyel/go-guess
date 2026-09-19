@@ -1,6 +1,16 @@
-INSERT INTO users (email, password_hash, role)
-VALUES ('interviewer@go-guess.local', crypt('admin123', gen_salt('bf')), 'interviewer')
-ON CONFLICT (email) DO NOTHING;
+INSERT INTO users (email, password_hash, display_name, role)
+VALUES ('interviewer@go-guess.local', crypt('admin123', gen_salt('bf')), 'Lead Interviewer', 'interviewer')
+ON CONFLICT (email) DO UPDATE SET
+    password_hash = EXCLUDED.password_hash,
+    display_name = EXCLUDED.display_name,
+    role = EXCLUDED.role;
+
+INSERT INTO users (email, password_hash, display_name, role)
+VALUES ('co-interviewer@go-guess.local', crypt('admin123', gen_salt('bf')), 'Co-Interviewer', 'interviewer')
+ON CONFLICT (email) DO UPDATE SET
+    password_hash = EXCLUDED.password_hash,
+    display_name = EXCLUDED.display_name,
+    role = EXCLUDED.role;
 
 INSERT INTO job_postings (title, description, seniority, position, status, duration_minutes)
 SELECT 'Senior Go Backend Engineer', 'Build reliable APIs for passenger-facing railway systems.',

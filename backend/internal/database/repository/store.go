@@ -15,12 +15,15 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("record not found")
-	ErrConflict = errors.New("record conflicts with existing data")
+	ErrNotFound            = errors.New("record not found")
+	ErrConflict            = errors.New("record conflicts with existing data")
+	ErrInterviewNotStarted = errors.New("interview is not started")
 )
 
 type IStore interface {
 	FindUserByEmail(context.Context, string) (servicemodel.User, error)
+	ListUsers(context.Context) ([]servicemodel.User, error)
+	CreateUser(context.Context, servicemodel.User) (servicemodel.User, error)
 	ListJobs(context.Context) ([]servicemodel.JobPosting, error)
 	GetJob(context.Context, uint) (servicemodel.JobPosting, error)
 	CreateJob(context.Context, servicemodel.JobPosting) (servicemodel.JobPosting, error)
@@ -42,6 +45,19 @@ type IStore interface {
 	AcceptInvitation(context.Context, string, time.Time) error
 	SaveAnswer(context.Context, string, uint, string) error
 	CompleteInvitation(context.Context, string, time.Time) error
+	GetInvitation(context.Context, uint, uint) (servicemodel.Invitation, error)
+	UpdateInvitationOutcome(context.Context, uint, uint, string) (servicemodel.Invitation, error)
+	CreateScheduledInterview(context.Context, servicemodel.ScheduledInterview, []uint) (servicemodel.ScheduledInterview, error)
+	ListScheduledInterviews(context.Context, uint) ([]servicemodel.ScheduledInterview, error)
+	GetScheduledInterview(context.Context, uint) (servicemodel.ScheduledInterview, error)
+	GetScheduledInterviewByToken(context.Context, string) (servicemodel.ScheduledInterview, error)
+	UpdateScheduledInterviewStatus(context.Context, uint, string) (servicemodel.ScheduledInterview, error)
+	UpdateScheduledInterviewDocument(context.Context, uint, string) (servicemodel.ScheduledInterview, error)
+	ListInterviewNotes(context.Context, uint) ([]servicemodel.InterviewNote, error)
+	CreateInterviewNote(context.Context, servicemodel.InterviewNote) (servicemodel.InterviewNote, error)
+	ListInbox(context.Context, uint) ([]servicemodel.ScheduledInterview, error)
+	UpdateAttendeeStatus(context.Context, uint, uint, string) (servicemodel.InterviewAttendee, error)
+	ListCalendar(context.Context, uint) ([]servicemodel.ScheduledInterview, error)
 }
 
 type Store struct {
@@ -58,6 +74,32 @@ func (s *Store) FindUserByEmail(ctx context.Context, email string) (servicemodel
 		return servicemodel.User{}, mapError(err)
 	}
 	return dbmapper.UserToService(value), nil
+}
+
+func (s *Store) ListUsers(ctx context.Context) ([]servicemodel.User, error) {
+	var values []dbmodel.User
+	if err := s.db.WithContext(ctx).Order("display_name, email").Find(&values).Error; err != nil {
+		return nil, err
+	}
+	result := make([]servicemodel.User, len(values))
+	for i, value := range values {
+		result[i] = dbmapper.UserToService(value)
+		result[i].PasswordHash = ""
+	}
+	return result, nil
+}
+
+func (s *Store) CreateUser(ctx context.Context, value servicemodel.User) (servicemodel.User, error) {
+	entity := dbmodel.User{
+		Email: value.Email, PasswordHash: value.PasswordHash,
+		DisplayName: value.DisplayName, Role: value.Role,
+	}
+	if err := s.db.WithContext(ctx).Create(&entity).Error; err != nil {
+		return servicemodel.User{}, mapError(err)
+	}
+	result := dbmapper.UserToService(entity)
+	result.PasswordHash = ""
+	return result, nil
 }
 
 func (s *Store) ListJobs(ctx context.Context) ([]servicemodel.JobPosting, error) {
@@ -370,6 +412,201 @@ func (s *Store) CompleteInvitation(ctx context.Context, token string, completedA
 	return nil
 }
 
+func (s *Store) GetInvitation(ctx context.Context, jobID, invitationID uint) (servicemodel.Invitation, error) {
+	var value dbmodel.Invitation
+	if err := s.db.WithContext(ctx).Preload("Participant").
+		Where("id = ? AND job_id = ?", invitationID, jobID).First(&value).Error; err != nil {
+		return servicemodel.Invitation{}, mapError(err)
+	}
+	return dbmapper.InvitationToService(value), nil
+}
+
+func (s *Store) UpdateInvitationOutcome(
+	ctx context.Context, jobID, invitationID uint, outcome string,
+) (servicemodel.Invitation, error) {
+	result := s.db.WithContext(ctx).Model(&dbmodel.Invitation{}).
+		Where("id = ? AND job_id = ?", invitationID, jobID).Update("outcome", outcome)
+	if result.Error != nil {
+		return servicemodel.Invitation{}, mapError(result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return servicemodel.Invitation{}, ErrNotFound
+	}
+	return s.GetInvitation(ctx, jobID, invitationID)
+}
+
+func (s *Store) CreateScheduledInterview(
+	ctx context.Context, value servicemodel.ScheduledInterview, interviewerIDs []uint,
+) (servicemodel.ScheduledInterview, error) {
+	entity := dbmodel.ScheduledInterview{
+		JobID: value.JobID, InvitationID: value.InvitationID, ParticipantID: value.ParticipantID,
+		CreatorID: value.CreatorID, StartsAt: value.StartsAt, Location: value.Location,
+		CandidateToken: value.CandidateToken, SharedDocument: value.SharedDocument, Status: value.Status,
+	}
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(&entity).Error; err != nil {
+			return err
+		}
+		attendees := make([]dbmodel.InterviewAttendee, 0, len(interviewerIDs))
+		for _, userID := range interviewerIDs {
+			status := "invited"
+			if userID == value.CreatorID {
+				status = "accepted"
+			}
+			attendees = append(attendees, dbmodel.InterviewAttendee{
+				InterviewID: entity.ID, UserID: userID, Status: status,
+			})
+		}
+		return tx.Create(&attendees).Error
+	})
+	if err != nil {
+		return servicemodel.ScheduledInterview{}, mapError(err)
+	}
+	return s.GetScheduledInterview(ctx, entity.ID)
+}
+
+func (s *Store) ListScheduledInterviews(ctx context.Context, jobID uint) ([]servicemodel.ScheduledInterview, error) {
+	var values []dbmodel.ScheduledInterview
+	if err := preloadScheduledInterview(s.db.WithContext(ctx)).Where("job_id = ?", jobID).
+		Order("starts_at").Find(&values).Error; err != nil {
+		return nil, err
+	}
+	return scheduledInterviewsToService(values), nil
+}
+
+func (s *Store) GetScheduledInterview(ctx context.Context, id uint) (servicemodel.ScheduledInterview, error) {
+	var value dbmodel.ScheduledInterview
+	if err := preloadScheduledInterview(s.db.WithContext(ctx)).First(&value, id).Error; err != nil {
+		return servicemodel.ScheduledInterview{}, mapError(err)
+	}
+	return dbmapper.ScheduledInterviewToService(value), nil
+}
+
+func (s *Store) GetScheduledInterviewByToken(ctx context.Context, token string) (servicemodel.ScheduledInterview, error) {
+	var value dbmodel.ScheduledInterview
+	if err := preloadScheduledInterview(s.db.WithContext(ctx)).
+		Where("candidate_token = ?", token).First(&value).Error; err != nil {
+		return servicemodel.ScheduledInterview{}, mapError(err)
+	}
+	return dbmapper.ScheduledInterviewToService(value), nil
+}
+
+func (s *Store) UpdateScheduledInterviewStatus(
+	ctx context.Context, id uint, status string,
+) (servicemodel.ScheduledInterview, error) {
+	result := s.db.WithContext(ctx).Model(&dbmodel.ScheduledInterview{}).
+		Where("id = ?", id).Update("status", status)
+	if result.Error != nil {
+		return servicemodel.ScheduledInterview{}, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return servicemodel.ScheduledInterview{}, ErrNotFound
+	}
+	return s.GetScheduledInterview(ctx, id)
+}
+
+func (s *Store) UpdateScheduledInterviewDocument(
+	ctx context.Context, id uint, document string,
+) (servicemodel.ScheduledInterview, error) {
+	result := s.db.WithContext(ctx).Model(&dbmodel.ScheduledInterview{}).
+		Where("id = ?", id).Update("shared_document", document)
+	if result.Error != nil {
+		return servicemodel.ScheduledInterview{}, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return servicemodel.ScheduledInterview{}, ErrNotFound
+	}
+	return s.GetScheduledInterview(ctx, id)
+}
+
+func (s *Store) ListInterviewNotes(ctx context.Context, interviewID uint) ([]servicemodel.InterviewNote, error) {
+	var values []dbmodel.InterviewNote
+	if err := s.db.WithContext(ctx).Preload("Author").Where("interview_id = ?", interviewID).
+		Order("created_at, id").Find(&values).Error; err != nil {
+		return nil, err
+	}
+	result := make([]servicemodel.InterviewNote, len(values))
+	for i, value := range values {
+		result[i] = dbmapper.InterviewNoteToService(value)
+	}
+	return result, nil
+}
+
+func (s *Store) CreateInterviewNote(
+	ctx context.Context, value servicemodel.InterviewNote,
+) (servicemodel.InterviewNote, error) {
+	entity := dbmodel.InterviewNote{
+		InterviewID: value.InterviewID, AuthorID: value.AuthorID, Body: value.Body,
+	}
+	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var interview dbmodel.ScheduledInterview
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Select("id", "status").First(&interview, value.InterviewID).Error; err != nil {
+			return err
+		}
+		if interview.Status != "started" {
+			return ErrInterviewNotStarted
+		}
+		return tx.Create(&entity).Error
+	}); err != nil {
+		if errors.Is(err, ErrInterviewNotStarted) {
+			return servicemodel.InterviewNote{}, err
+		}
+		return servicemodel.InterviewNote{}, mapError(err)
+	}
+	if err := s.db.WithContext(ctx).Preload("Author").First(&entity, entity.ID).Error; err != nil {
+		return servicemodel.InterviewNote{}, mapError(err)
+	}
+	return dbmapper.InterviewNoteToService(entity), nil
+}
+
+func (s *Store) ListInbox(ctx context.Context, userID uint) ([]servicemodel.ScheduledInterview, error) {
+	var values []dbmodel.ScheduledInterview
+	if err := preloadScheduledInterview(s.db.WithContext(ctx)).
+		Joins("JOIN interview_attendees inbox_attendee ON inbox_attendee.interview_id = scheduled_interviews.id").
+		Where("inbox_attendee.user_id = ?", userID).
+		Order("inbox_attendee.created_at DESC").Find(&values).Error; err != nil {
+		return nil, err
+	}
+	return scheduledInterviewsToService(values), nil
+}
+
+func (s *Store) UpdateAttendeeStatus(
+	ctx context.Context, interviewID, userID uint, status string,
+) (servicemodel.InterviewAttendee, error) {
+	result := s.db.WithContext(ctx).Model(&dbmodel.InterviewAttendee{}).
+		Where("interview_id = ? AND user_id = ?", interviewID, userID).Update("status", status)
+	if result.Error != nil {
+		return servicemodel.InterviewAttendee{}, result.Error
+	}
+	if result.RowsAffected == 0 {
+		return servicemodel.InterviewAttendee{}, ErrNotFound
+	}
+	var value dbmodel.InterviewAttendee
+	if err := s.db.WithContext(ctx).Preload("User").
+		Where("interview_id = ? AND user_id = ?", interviewID, userID).First(&value).Error; err != nil {
+		return servicemodel.InterviewAttendee{}, mapError(err)
+	}
+	attendee := servicemodel.InterviewAttendee{
+		ID: value.ID, InterviewID: value.InterviewID, UserID: value.UserID,
+		Status: value.Status, User: dbmapper.UserToService(value.User),
+		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+	}
+	attendee.User.PasswordHash = ""
+	return attendee, nil
+}
+
+func (s *Store) ListCalendar(ctx context.Context, userID uint) ([]servicemodel.ScheduledInterview, error) {
+	var values []dbmodel.ScheduledInterview
+	if err := preloadScheduledInterview(s.db.WithContext(ctx)).
+		Joins("JOIN interview_attendees ON interview_attendees.interview_id = scheduled_interviews.id").
+		Where("interview_attendees.user_id = ? AND interview_attendees.status <> ?", userID, "declined").
+		Order("scheduled_interviews.starts_at").Find(&values).Error; err != nil {
+		return nil, err
+	}
+	return scheduledInterviewsToService(values), nil
+}
+
 func (s *Store) resolveTraits(ctx context.Context, values []servicemodel.Trait) ([]dbmodel.Trait, error) {
 	result := make([]dbmodel.Trait, 0, len(values))
 	seen := make(map[string]struct{}, len(values))
@@ -396,6 +633,23 @@ func (s *Store) resolveTraits(ctx context.Context, values []servicemodel.Trait) 
 func preloadJob(db *gorm.DB) *gorm.DB {
 	return db.Preload("Labels").Preload("RequiredSkills").Preload("AdditionalSkills").
 		Preload("Questions.Options")
+}
+
+func preloadScheduledInterview(db *gorm.DB) *gorm.DB {
+	return db.Preload("Job", func(db *gorm.DB) *gorm.DB {
+		return db.Select("id", "title")
+	}).Preload("Participant", func(db *gorm.DB) *gorm.DB {
+		return db.Select("id", "first_name", "last_name")
+	}).
+		Preload("Creator").Preload("Attendees.User").Preload("Notes.Author")
+}
+
+func scheduledInterviewsToService(values []dbmodel.ScheduledInterview) []servicemodel.ScheduledInterview {
+	result := make([]servicemodel.ScheduledInterview, len(values))
+	for i, value := range values {
+		result[i] = dbmapper.ScheduledInterviewToService(value)
+	}
+	return result
 }
 
 func mapError(err error) error {

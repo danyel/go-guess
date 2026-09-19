@@ -37,6 +37,8 @@ Supported routes:
 - `GET /api/jobs/:id/candidates`
 - `GET|POST /api/jobs/:id/invitations`
 - `GET /api/jobs/:jobId/invitations/:invitationId` for protected answer review
+- `PATCH /api/jobs/:jobId/invitations/:invitationId/outcome`
+- `GET|POST /api/jobs/:jobId/interviews`
 - `GET|POST /api/questions` (`GET` accepts `?search=`)
 - `PUT /api/questions/:id` to update question text, type, options, reference answer, and code snippet
 - `PATCH /api/questions/:id` to deprecate or restore a question
@@ -48,6 +50,15 @@ Supported routes:
 - `POST /api/interviews/:token/accept`
 - `PUT /api/interviews/:token/answers/:questionId`
 - `POST /api/interviews/:token/finish`
+- `GET|POST /api/users`
+- `GET /api/inbox` and `PATCH /api/inbox/:interviewId`
+- `GET /api/calendar`
+- `GET /api/scheduled-interviews/:id`
+- `PATCH /api/scheduled-interviews/:id/status`
+- `PATCH /api/scheduled-interviews/:id/document`
+- `GET|POST /api/scheduled-interviews/:id/notes`
+- `GET /api/scheduled-interviews/:id/events` (authenticated fetch-based SSE)
+- `GET /api/participant-meetings/:token` (public)
 
 Participant creation uses multipart fields `firstName`, `lastName`, `birthday`, `email`,
 `contactInfo`, `photo`, and `cv`.
@@ -64,6 +75,18 @@ rendered in the participant interview. Code-review questions also require a code
 Accepted and completed invitations can be opened from the job to review every participant answer,
 possible choice options, reference answers, and code-review context; unanswered questions are
 called out explicitly.
+Completed assessments can be marked as passed or failed. Passed candidates expose a scheduling
+form for the date, location, co-interviewers, and candidate-visible shared documentation.
+
+The authenticated workspace also includes:
+
+- **Users** for listing and creating co-interviewers.
+- **Inbox** for accepting or declining interview assignments.
+- **Calendar** for interviews grouped by date.
+- **Interviewer sessions** for changing status, editing prominent shared documentation, and
+  posting private notes while an interview is started. Notes arrive live through an authenticated
+  streaming `fetch`; the app intentionally does not use `EventSource`, because the request needs
+  the JWT authorization header.
 
 Participants open the generated `/participant/:invitationId` URL without signing in. The opaque
 invitation ID authorizes the existing `/api/interviews/:token` API. Code-review questions are shown
@@ -71,6 +94,10 @@ in a pull-request-style code panel with a review comment field. Answers are save
 between questions and as they change, then **Submit** completes the interview. The countdown is
 derived from the backend `acceptedAt` timestamp plus the job duration so refreshing cannot reset
 it. Questions stay hidden until the participant explicitly accepts the invitation.
+
+Scheduled candidates use `/participant/meeting/:token`. This public view shows the interview date,
+location, status, and read-only shared documentation. It never renders interviewer notes or
+assessment reference answers.
 
 ## Container
 

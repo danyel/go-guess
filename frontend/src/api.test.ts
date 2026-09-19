@@ -9,7 +9,7 @@ describe('API client', () => {
   it('sends the persisted bearer token on protected requests', async () => {
     authStorage.save({
       token: 'signed-jwt',
-      user: { id: 1, email: 'admin@example.com', role: 'admin' },
+      user: { id: 1, email: 'admin@example.com', displayName: 'Admin', role: 'admin' },
     })
     const fetchMock = vi.fn().mockResolvedValue(new Response('[]', { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
@@ -27,7 +27,7 @@ describe('API client', () => {
   it('uses the backend participant multipart field names', async () => {
     authStorage.save({
       token: 'signed-jwt',
-      user: { id: 1, email: 'admin@example.com', role: 'admin' },
+      user: { id: 1, email: 'admin@example.com', displayName: 'Admin', role: 'admin' },
     })
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

@@ -46,7 +46,8 @@ test-integration:
 
 test-env:
 	COMPOSE_PROJECT_NAME=go-guess-test APP_ENV=test DB_PORT=15432 API_PORT=18080 \
-		WEB_PORT=15173 FRONTEND_URL=http://localhost:15173 docker compose up -d --build
+		WEB_PORT=15173 FRONTEND_URL=http://localhost:15173 RABBITMQ_AMQP_PORT=15673 \
+		RABBITMQ_MANAGEMENT_PORT=25673 docker compose up -d --build
 
 test-env-down:
 	COMPOSE_PROJECT_NAME=go-guess-test docker compose down -v --remove-orphans

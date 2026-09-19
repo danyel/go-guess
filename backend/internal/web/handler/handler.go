@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/danyel/go-guess/backend/internal/database/repository"
+	"github.com/danyel/go-guess/backend/internal/security"
 	"github.com/danyel/go-guess/backend/internal/service"
 	servicemodel "github.com/danyel/go-guess/backend/internal/service/model"
 	webmapper "github.com/danyel/go-guess/backend/internal/web/mapper"
@@ -27,6 +28,8 @@ type Handler struct {
 	questions    service.IQuestionService
 	participants service.IParticipantService
 	invitations  service.IInvitationService
+	users        service.IUserService
+	interviews   service.IScheduledInterviewService
 	maxUpload    int64
 	frontendURL  string
 }
@@ -37,12 +40,15 @@ func New(
 	questions service.IQuestionService,
 	participants service.IParticipantService,
 	invitations service.IInvitationService,
+	users service.IUserService,
+	interviews service.IScheduledInterviewService,
 	maxUploadMB int64,
 	frontendURL string,
 ) *Handler {
 	return &Handler{
 		auth: auth, jobs: jobs, questions: questions, participants: participants,
 		invitations: invitations, maxUpload: maxUploadMB << 20,
+		users: users, interviews: interviews,
 		frontendURL: strings.TrimRight(frontendURL, "/"),
 	}
 }
@@ -67,8 +73,34 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, webmodel.LoginResponse{
-		Token: token, User: webmodel.User{ID: user.ID, Email: user.Email, Role: user.Role},
+		Token: token, User: webmapper.UserToWeb(user),
 	})
+}
+
+func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
+	values, err := h.users.List(r.Context())
+	if err != nil {
+		internalError(w, r, err)
+		return
+	}
+	response := make([]webmodel.User, len(values))
+	for i, value := range values {
+		response[i] = webmapper.UserToWeb(value)
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var request webmodel.CreateUserRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	value, err := h.users.Create(r.Context(), request.Email, request.Password, request.DisplayName)
+	if handleServiceError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, webmapper.UserToWeb(value))
 }
 
 func (h *Handler) ListJobs(w http.ResponseWriter, r *http.Request) {
@@ -325,6 +357,193 @@ func (h *Handler) ReviewInvitation(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, webmapper.InvitationReviewToWeb(value, h.frontendURL))
 }
 
+func (h *Handler) SetInvitationOutcome(w http.ResponseWriter, r *http.Request) {
+	var request webmodel.InvitationOutcomeRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	value, err := h.invitations.SetOutcome(
+		r.Context(), idParam(r), secondaryIDParam(r, "invitationId"), request.Outcome,
+	)
+	if handleServiceError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, webmapper.InvitationToWeb(value, h.frontendURL))
+}
+
+func (h *Handler) CreateScheduledInterview(w http.ResponseWriter, r *http.Request) {
+	var request webmodel.CreateScheduledInterviewRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	value, err := h.interviews.Create(r.Context(), currentUserID(r), idParam(r), servicemodel.ScheduledInterview{
+		InvitationID: request.InvitationID, StartsAt: request.StartsAt,
+		Location: request.Location, SharedDocument: request.SharedDocument,
+	}, request.InterviewerIDs)
+	if handleServiceError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, webmapper.ScheduledInterviewToWeb(value, h.frontendURL))
+}
+
+func (h *Handler) ListScheduledInterviews(w http.ResponseWriter, r *http.Request) {
+	values, err := h.interviews.List(r.Context(), currentUserID(r), idParam(r))
+	if handleServiceError(w, r, err) {
+		return
+	}
+	response := make([]webmodel.ScheduledInterviewResponse, len(values))
+	for i, value := range values {
+		response[i] = webmapper.ScheduledInterviewToWeb(value, h.frontendURL)
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *Handler) GetScheduledInterview(w http.ResponseWriter, r *http.Request) {
+	value, err := h.interviews.Get(r.Context(), currentUserID(r), idParam(r))
+	if handleServiceError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, webmapper.ScheduledInterviewToWeb(value, h.frontendURL))
+}
+
+func (h *Handler) UpdateScheduledInterviewStatus(w http.ResponseWriter, r *http.Request) {
+	var request webmodel.InterviewStatusRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	value, err := h.interviews.UpdateStatus(r.Context(), currentUserID(r), idParam(r), request.Status)
+	if handleServiceError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, webmapper.ScheduledInterviewToWeb(value, h.frontendURL))
+}
+
+func (h *Handler) UpdateScheduledInterviewDocument(w http.ResponseWriter, r *http.Request) {
+	var request webmodel.InterviewDocumentRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	value, err := h.interviews.UpdateDocument(
+		r.Context(), currentUserID(r), idParam(r), request.SharedDocument,
+	)
+	if handleServiceError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, webmapper.ScheduledInterviewToWeb(value, h.frontendURL))
+}
+
+func (h *Handler) ListInterviewNotes(w http.ResponseWriter, r *http.Request) {
+	values, err := h.interviews.ListNotes(r.Context(), currentUserID(r), idParam(r))
+	if handleServiceError(w, r, err) {
+		return
+	}
+	response := make([]webmodel.InterviewNoteResponse, len(values))
+	for i, value := range values {
+		response[i] = webmapper.InterviewNoteToWeb(value)
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *Handler) CreateInterviewNote(w http.ResponseWriter, r *http.Request) {
+	var request webmodel.InterviewNoteRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	value, err := h.interviews.CreateNote(r.Context(), currentUserID(r), idParam(r), request.Body)
+	if handleServiceError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusCreated, webmapper.InterviewNoteToWeb(value))
+}
+
+func (h *Handler) ListInbox(w http.ResponseWriter, r *http.Request) {
+	values, err := h.interviews.ListInbox(r.Context(), currentUserID(r))
+	if handleServiceError(w, r, err) {
+		return
+	}
+	response := make([]webmodel.ScheduledInterviewResponse, len(values))
+	for i, value := range values {
+		response[i] = webmapper.ScheduledInterviewToWeb(value, h.frontendURL)
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *Handler) UpdateInbox(w http.ResponseWriter, r *http.Request) {
+	var request webmodel.AttendeeStatusRequest
+	if err := decodeJSON(r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	value, err := h.interviews.UpdateInbox(r.Context(), currentUserID(r), idParam(r), request.Status)
+	if handleServiceError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, webmapper.ScheduledInterviewToWeb(value, h.frontendURL))
+}
+
+func (h *Handler) ListCalendar(w http.ResponseWriter, r *http.Request) {
+	values, err := h.interviews.ListCalendar(r.Context(), currentUserID(r))
+	if handleServiceError(w, r, err) {
+		return
+	}
+	response := make([]webmodel.ScheduledInterviewResponse, len(values))
+	for i, value := range values {
+		response[i] = webmapper.ScheduledInterviewToWeb(value, h.frontendURL)
+	}
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *Handler) GetParticipantMeeting(w http.ResponseWriter, r *http.Request) {
+	value, err := h.interviews.GetParticipantMeeting(r.Context(), chi.URLParam(r, "token"))
+	if handleServiceError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, webmapper.ParticipantMeetingToWeb(value))
+}
+
+func (h *Handler) InterviewEvents(w http.ResponseWriter, r *http.Request) {
+	events, err := h.interviews.Subscribe(r.Context(), currentUserID(r), idParam(r))
+	if handleServiceError(w, r, err) {
+		return
+	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		internalError(w, r, errors.New("streaming is unsupported"))
+		return
+	}
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.WriteHeader(http.StatusOK)
+	flusher.Flush()
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case event, ok := <-events:
+			if !ok {
+				return
+			}
+			if event.InterviewID != idParam(r) {
+				continue
+			}
+			payload, err := json.Marshal(event)
+			if err != nil {
+				return
+			}
+			if _, err := fmt.Fprintf(w, "event: interview-note\ndata: %s\n\n", payload); err != nil {
+				return
+			}
+			flusher.Flush()
+		}
+	}
+}
+
 func (h *Handler) GetInterview(w http.ResponseWriter, r *http.Request) {
 	value, err := h.invitations.GetInterview(r.Context(), chi.URLParam(r, "token"))
 	if handleServiceError(w, r, err) {
@@ -422,10 +641,17 @@ func handleServiceError(w http.ResponseWriter, r *http.Request, err error) bool 
 		writeError(w, http.StatusConflict, err)
 	case errors.Is(err, service.ErrNotAvailable):
 		writeError(w, http.StatusNotFound, err)
+	case errors.Is(err, service.ErrForbidden):
+		writeError(w, http.StatusForbidden, err)
 	default:
 		internalError(w, r, err)
 	}
 	return true
+}
+
+func currentUserID(r *http.Request) uint {
+	id, _ := security.UserIDFromContext(r.Context())
+	return id
 }
 
 func internalError(w http.ResponseWriter, r *http.Request, err error) {

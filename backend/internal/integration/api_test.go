@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -26,6 +27,7 @@ import (
 
 	"github.com/danyel/go-guess/backend/internal/database/repository"
 	"github.com/danyel/go-guess/backend/internal/database/seed"
+	"github.com/danyel/go-guess/backend/internal/eventbus"
 	"github.com/danyel/go-guess/backend/internal/security"
 	"github.com/danyel/go-guess/backend/internal/service"
 	"github.com/danyel/go-guess/backend/internal/web/handler"
@@ -33,11 +35,31 @@ import (
 	"github.com/danyel/go-guess/backend/internal/web/router"
 )
 
-var testServer *httptest.Server
+var (
+	testServer *httptest.Server
+	testBus    eventbus.IEventBus
+)
 
 func TestMain(m *testing.M) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
+
+	rabbitContainer, err := testcontainers.Run(
+		ctx,
+		"rabbitmq:4-management-alpine",
+		testcontainers.WithExposedPorts("5672/tcp"),
+		testcontainers.WithEnv(map[string]string{
+			"RABBITMQ_DEFAULT_USER": "go_guess",
+			"RABBITMQ_DEFAULT_PASS": "go_guess",
+		}),
+		testcontainers.WithWaitStrategy(
+			wait.ForListeningPort("5672/tcp").WithStartupTimeout(90*time.Second),
+		),
+	)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "start RabbitMQ test container:", err)
+		os.Exit(1)
+	}
 
 	container, err := tcpostgres.Run(
 		ctx,
@@ -53,6 +75,7 @@ func TestMain(m *testing.M) {
 	)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "start PostgreSQL test container:", err)
+		_ = rabbitContainer.Terminate(context.Background())
 		os.Exit(1)
 	}
 
@@ -95,6 +118,19 @@ func TestMain(m *testing.M) {
 	store := repository.New(gormDB)
 	tokens := security.NewTokenManager("integration-test-secret-at-least-32-bytes", time.Hour)
 	invitations := service.NewInvitationService(store, "http://example.test")
+	rabbitEndpoint, err := rabbitContainer.PortEndpoint(ctx, "5672/tcp", "amqp")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "get RabbitMQ endpoint:", err)
+		os.Exit(1)
+	}
+	rabbitURL := strings.Replace(rabbitEndpoint, "amqp://", "amqp://go_guess:go_guess@", 1) + "/"
+	amqpBus, err := eventbus.NewAMQPBus(rabbitURL)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "connect RabbitMQ:", err)
+		os.Exit(1)
+	}
+	testBus = amqpBus
+	interviews := service.NewScheduledInterviewService(store, testBus)
 	testServer = httptest.NewServer(router.New(
 		handler.New(
 			service.NewAuthService(store, tokens),
@@ -102,6 +138,8 @@ func TestMain(m *testing.M) {
 			service.NewQuestionService(store),
 			service.NewParticipantService(store),
 			invitations,
+			service.NewUserService(store),
+			interviews,
 			10,
 			"http://example.test",
 		),
@@ -111,9 +149,11 @@ func TestMain(m *testing.M) {
 
 	code := m.Run()
 	testServer.Close()
+	_ = amqpBus.Close()
 	_ = sqlDB.Close()
 	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	_ = container.Terminate(cleanupCtx)
+	_ = rabbitContainer.Terminate(cleanupCtx)
 	cleanupCancel()
 	os.Exit(code)
 }
@@ -142,12 +182,12 @@ func TestCompleteInterviewWorkflow(t *testing.T) {
 	var question webmodel.QuestionResponse
 	requestJSON(t, http.MethodPost, "/api/questions", login.Token, map[string]any{
 		"text": "Review this error handling.", "type": "code_review",
-		"codeSnippet": "func run() error {\n  execute()\n  return nil\n}",
+		"codeSnippet":     "func run() error {\n  execute()\n  return nil\n}",
 		"referenceAnswer": "Return the execute error.", "options": []string{},
 	}, http.StatusCreated, &question)
 	requestJSON(t, http.MethodPut, fmt.Sprintf("/api/questions/%d", question.ID), login.Token, map[string]any{
 		"text": "Review this ignored error.", "type": "code_review",
-		"codeSnippet": "func run() error {\n  execute()\n  return nil\n}",
+		"codeSnippet":     "func run() error {\n  execute()\n  return nil\n}",
 		"referenceAnswer": "Propagate the execute error.", "options": []string{},
 	}, http.StatusOK, &question)
 
@@ -220,6 +260,109 @@ func TestCompleteInterviewWorkflow(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("review did not include interviewer question context: %#v", review.Job.Questions)
+	}
+
+	requestJSON(t, http.MethodPatch,
+		fmt.Sprintf("/api/jobs/%d/invitations/%d/outcome", jobID, invitation.ID),
+		login.Token, map[string]any{"outcome": "passed"}, http.StatusOK, &invitation)
+	if invitation.Outcome != "passed" {
+		t.Fatalf("assessment outcome was not updated: %#v", invitation)
+	}
+
+	var coInterviewer webmodel.User
+	requestJSON(t, http.MethodPost, "/api/users", login.Token, map[string]any{
+		"email": "co.integration@example.com", "password": "integration-password",
+		"displayName": "Co Interviewer",
+	}, http.StatusCreated, &coInterviewer)
+	if coInterviewer.Role != "co_interviewer" {
+		t.Fatalf("unexpected co-interviewer: %#v", coInterviewer)
+	}
+
+	var scheduled webmodel.ScheduledInterviewResponse
+	requestJSON(t, http.MethodPost, fmt.Sprintf("/api/jobs/%d/interviews", jobID),
+		login.Token, map[string]any{
+			"invitationId": invitation.ID, "startsAt": time.Now().Add(time.Hour),
+			"location": "Meeting room", "interviewerIds": []uint{coInterviewer.ID},
+			"sharedDocument": "Collaborative notes",
+		}, http.StatusCreated, &scheduled)
+	if scheduled.CandidateURL != "http://example.test/participant/meeting/"+scheduled.CandidateToken ||
+		len(scheduled.Attendees) != 2 || scheduled.JobTitle == "" || scheduled.ParticipantName == "" {
+		t.Fatalf("unexpected scheduled interview: %#v", scheduled)
+	}
+
+	var coLogin webmodel.LoginResponse
+	requestJSON(t, http.MethodPost, "/api/auth/login", "", map[string]any{
+		"email": "co.integration@example.com", "password": "integration-password",
+	}, http.StatusOK, &coLogin)
+
+	var inbox []webmodel.ScheduledInterviewResponse
+	requestJSON(t, http.MethodGet, "/api/inbox", coLogin.Token, nil, http.StatusOK, &inbox)
+	if len(inbox) != 1 || inbox[0].ID != scheduled.ID {
+		t.Fatalf("scheduled interview missing from co-interviewer inbox: %#v", inbox)
+	}
+	requestJSON(t, http.MethodPatch, fmt.Sprintf("/api/inbox/%d", scheduled.ID),
+		coLogin.Token, map[string]any{"status": "accepted"}, http.StatusOK, &scheduled)
+	var calendar []webmodel.ScheduledInterviewResponse
+	requestJSON(t, http.MethodGet, "/api/calendar", coLogin.Token, nil, http.StatusOK, &calendar)
+	if len(calendar) != 1 || calendar[0].ID != scheduled.ID {
+		t.Fatalf("accepted interview missing from calendar: %#v", calendar)
+	}
+
+	requestJSON(t, http.MethodPost, fmt.Sprintf("/api/scheduled-interviews/%d/notes", scheduled.ID),
+		login.Token, map[string]any{"body": "Too early"}, http.StatusConflict, nil)
+	requestJSON(t, http.MethodPatch, fmt.Sprintf("/api/scheduled-interviews/%d/status", scheduled.ID),
+		login.Token, map[string]any{"status": "started"}, http.StatusOK, &scheduled)
+
+	subscriptionContext, cancelSubscriptions := context.WithCancel(context.Background())
+	defer cancelSubscriptions()
+	firstEvents, err := testBus.SubscribeInterviewNotes(subscriptionContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondEvents, err := testBus.SubscribeInterviewNotes(subscriptionContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var note webmodel.InterviewNoteResponse
+	requestJSON(t, http.MethodPost, fmt.Sprintf("/api/scheduled-interviews/%d/notes", scheduled.ID),
+		coLogin.Token, map[string]any{"body": "Candidate explained the trade-offs clearly."},
+		http.StatusCreated, &note)
+	if note.AuthorUserID != coInterviewer.ID || note.AuthorName != "Co Interviewer" {
+		t.Fatalf("unexpected note response: %#v", note)
+	}
+	for index, events := range []<-chan eventbus.InterviewNoteEvent{firstEvents, secondEvents} {
+		select {
+		case received := <-events:
+			if received.ID != note.ID || received.AuthorUserID != coInterviewer.ID {
+				t.Fatalf("subscriber %d received unexpected RabbitMQ event: %#v", index+1, received)
+			}
+			encoded, err := json.Marshal(received)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Contains(encoded, []byte(`"id":`)) || bytes.Contains(encoded, []byte(`"noteId":`)) {
+				t.Fatalf("subscriber %d received an incompatible note contract: %s", index+1, encoded)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("subscriber %d did not receive RabbitMQ note event", index+1)
+		}
+	}
+	var notes []webmodel.InterviewNoteResponse
+	requestJSON(t, http.MethodGet, fmt.Sprintf("/api/scheduled-interviews/%d/notes", scheduled.ID),
+		login.Token, nil, http.StatusOK, &notes)
+	if len(notes) != 1 || notes[0].Body != note.Body {
+		t.Fatalf("persisted interview note missing: %#v", notes)
+	}
+
+	var meeting webmodel.ParticipantMeetingResponse
+	body := requestJSON(t, http.MethodGet, "/api/participant-meetings/"+scheduled.CandidateToken,
+		"", nil, http.StatusOK, &meeting)
+	if meeting.SharedDocument != "Collaborative notes" ||
+		bytes.Contains(body, []byte("participantEmail")) ||
+		bytes.Contains(body, []byte("referenceAnswer")) ||
+		bytes.Contains(body, []byte(`"notes":`)) {
+		t.Fatalf("invalid candidate-safe meeting response: %s", body)
 	}
 }
 

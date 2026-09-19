@@ -6,7 +6,10 @@ import (
 )
 
 func UserToService(value dbmodel.User) servicemodel.User {
-	return servicemodel.User{ID: value.ID, Email: value.Email, PasswordHash: value.PasswordHash, Role: value.Role}
+	return servicemodel.User{
+		ID: value.ID, Email: value.Email, PasswordHash: value.PasswordHash,
+		DisplayName: value.DisplayName, Role: value.Role,
+	}
 }
 
 func JobToService(value dbmodel.JobPosting) servicemodel.JobPosting {
@@ -63,7 +66,45 @@ func InvitationToService(value dbmodel.Invitation) servicemodel.Invitation {
 		ID: value.ID, JobID: value.JobID, ParticipantID: value.ParticipantID,
 		ParticipantName:  value.Participant.FirstName + " " + value.Participant.LastName,
 		ParticipantEmail: value.Participant.Email, Token: value.Token, Status: value.Status,
+		Outcome:         value.Outcome,
 		DurationMinutes: value.DurationMinutes, AcceptedAt: value.AcceptedAt,
 		CompletedAt: value.CompletedAt, CreatedAt: value.CreatedAt,
+	}
+}
+
+func ScheduledInterviewToService(value dbmodel.ScheduledInterview) servicemodel.ScheduledInterview {
+	attendees := make([]servicemodel.InterviewAttendee, len(value.Attendees))
+	for i, attendee := range value.Attendees {
+		attendees[i] = servicemodel.InterviewAttendee{
+			ID: attendee.ID, InterviewID: attendee.InterviewID, UserID: attendee.UserID,
+			Status: attendee.Status, User: UserToService(attendee.User),
+			CreatedAt: attendee.CreatedAt, UpdatedAt: attendee.UpdatedAt,
+		}
+		attendees[i].User.PasswordHash = ""
+	}
+	creator := UserToService(value.Creator)
+	creator.PasswordHash = ""
+	notes := make([]servicemodel.InterviewNote, len(value.Notes))
+	for i, note := range value.Notes {
+		notes[i] = InterviewNoteToService(note)
+	}
+	return servicemodel.ScheduledInterview{
+		ID: value.ID, JobID: value.JobID, InvitationID: value.InvitationID,
+		ParticipantID: value.ParticipantID, CreatorID: value.CreatorID,
+		StartsAt: value.StartsAt, Location: value.Location, CandidateToken: value.CandidateToken,
+		SharedDocument: value.SharedDocument, Status: value.Status,
+		Job: JobToService(value.Job), Invitation: InvitationToService(value.Invitation),
+		Participant: ParticipantToService(value.Participant), Creator: creator,
+		Attendees: attendees, Notes: notes,
+		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+	}
+}
+
+func InterviewNoteToService(value dbmodel.InterviewNote) servicemodel.InterviewNote {
+	author := UserToService(value.Author)
+	author.PasswordHash = ""
+	return servicemodel.InterviewNote{
+		ID: value.ID, InterviewID: value.InterviewID, AuthorID: value.AuthorID,
+		Author: author, Body: value.Body, CreatedAt: value.CreatedAt,
 	}
 }

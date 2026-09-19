@@ -1,7 +1,6 @@
 package router
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -13,10 +12,6 @@ import (
 	"github.com/danyel/go-guess/backend/internal/web/handler"
 )
 
-type contextKey string
-
-const claimsKey contextKey = "claims"
-
 func New(h *handler.Handler, tokens security.ITokenManager, frontendURL string) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer, middleware.Compress(5))
@@ -27,6 +22,7 @@ func New(h *handler.Handler, tokens security.ITokenManager, frontendURL string) 
 	router.Post("/api/interviews/{token}/accept", h.AcceptInterview)
 	router.Put("/api/interviews/{token}/answers/{questionId}", h.SaveAnswer)
 	router.Post("/api/interviews/{token}/finish", h.FinishInterview)
+	router.Get("/api/participant-meetings/{token}", h.GetParticipantMeeting)
 	router.Group(func(protected chi.Router) {
 		protected.Use(authenticate(tokens))
 		protected.Get("/api/jobs", h.ListJobs)
@@ -39,6 +35,20 @@ func New(h *handler.Handler, tokens security.ITokenManager, frontendURL string) 
 		protected.Get("/api/jobs/{id}/invitations", h.ListInvitations)
 		protected.Post("/api/jobs/{id}/invitations", h.CreateInvitation)
 		protected.Get("/api/jobs/{id}/invitations/{invitationId}", h.ReviewInvitation)
+		protected.Patch("/api/jobs/{id}/invitations/{invitationId}/outcome", h.SetInvitationOutcome)
+		protected.Get("/api/jobs/{id}/interviews", h.ListScheduledInterviews)
+		protected.Post("/api/jobs/{id}/interviews", h.CreateScheduledInterview)
+		protected.Get("/api/scheduled-interviews/{id}", h.GetScheduledInterview)
+		protected.Patch("/api/scheduled-interviews/{id}/status", h.UpdateScheduledInterviewStatus)
+		protected.Patch("/api/scheduled-interviews/{id}/document", h.UpdateScheduledInterviewDocument)
+		protected.Get("/api/scheduled-interviews/{id}/notes", h.ListInterviewNotes)
+		protected.Post("/api/scheduled-interviews/{id}/notes", h.CreateInterviewNote)
+		protected.Get("/api/scheduled-interviews/{id}/events", h.InterviewEvents)
+		protected.Get("/api/users", h.ListUsers)
+		protected.Post("/api/users", h.CreateUser)
+		protected.Get("/api/inbox", h.ListInbox)
+		protected.Patch("/api/inbox/{id}", h.UpdateInbox)
+		protected.Get("/api/calendar", h.ListCalendar)
 		protected.Get("/api/questions", h.ListQuestions)
 		protected.Post("/api/questions", h.CreateQuestion)
 		protected.Put("/api/questions/{id}", h.UpdateQuestion)
@@ -72,7 +82,7 @@ func authenticate(tokens security.ITokenManager) func(http.Handler) http.Handler
 				return
 			}
 
-			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), claimsKey, claims)))
+			next.ServeHTTP(w, r.WithContext(security.WithClaims(r.Context(), claims)))
 		})
 	}
 }

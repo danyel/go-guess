@@ -4,12 +4,17 @@ import type {
   CreateJobInput,
   CreateParticipantInput,
   CreateQuestionInput,
+  CreateScheduledInterviewInput,
   Interview,
   Invitation,
   Job,
   JobStatus,
   Participant,
+  ParticipantMeeting,
   Question,
+  ScheduledInterview,
+  User,
+  InterviewNote,
 } from './types'
 
 const TOKEN_KEY = 'go-guess-token'
@@ -131,6 +136,17 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ participantId }),
       }),
+    setInvitationOutcome: (jobId: number, invitationId: number, outcome: Invitation['outcome']) =>
+      request<Invitation>(`/jobs/${jobId}/invitations/${invitationId}/outcome`, {
+        method: 'PATCH',
+        body: JSON.stringify({ outcome }),
+      }),
+    interviews: (jobId: number) => request<ScheduledInterview[]>(`/jobs/${jobId}/interviews`),
+    scheduleInterview: (jobId: number, input: CreateScheduledInterviewInput) =>
+      request<ScheduledInterview>(`/jobs/${jobId}/interviews`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      }),
   },
   questions: {
     list: (search = '') =>
@@ -177,5 +193,77 @@ export const api = {
       if (input.cv) form.append('cv', input.cv)
       return request<Participant>('/participants', { method: 'POST', body: form })
     },
+  },
+  users: {
+    list: () => request<User[]>('/users'),
+    create: (input: { email: string; password: string; displayName: string }) =>
+      request<User>('/users', { method: 'POST', body: JSON.stringify(input) }),
+  },
+  inbox: {
+    list: () => request<ScheduledInterview[]>('/inbox'),
+    respond: (interviewId: number, status: 'accepted' | 'declined') =>
+      request<ScheduledInterview>(`/inbox/${interviewId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }),
+  },
+  calendar: () => request<ScheduledInterview[]>('/calendar'),
+  scheduledInterviews: {
+    get: (id: number) => request<ScheduledInterview>(`/scheduled-interviews/${id}`),
+    setStatus: (id: number, status: string) =>
+      request<ScheduledInterview>(`/scheduled-interviews/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      }),
+    updateDocument: (id: number, sharedDocument: string) =>
+      request<ScheduledInterview>(`/scheduled-interviews/${id}/document`, {
+        method: 'PATCH',
+        body: JSON.stringify({ sharedDocument }),
+      }),
+    notes: (id: number) => request<InterviewNote[]>(`/scheduled-interviews/${id}/notes`),
+    addNote: (id: number, body: string) =>
+      request<InterviewNote>(`/scheduled-interviews/${id}/notes`, {
+        method: 'POST',
+        body: JSON.stringify({ body }),
+      }),
+    subscribe: async (id: number, onNote: (note: InterviewNote) => void, signal: AbortSignal) => {
+      const token = authStorage.token()
+      const response = await fetch(`/api/scheduled-interviews/${id}/events`, {
+        headers: {
+          Accept: 'text/event-stream',
+          ...(token ? { Authorization: 'Bearer ' + token } : {}),
+        },
+        signal,
+      })
+      if (!response.ok || !response.body)
+        throw new ApiError(`Live updates failed with status ${response.status}`, response.status)
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (!signal.aborted) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+        let boundary = buffer.indexOf('\n\n')
+        while (boundary >= 0) {
+          const message = buffer.slice(0, boundary)
+          buffer = buffer.slice(boundary + 2)
+          const data = message
+            .split('\n')
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).trimStart())
+            .join('\n')
+          if (data) {
+            const event = JSON.parse(data) as InterviewNote | { note: InterviewNote }
+            onNote('note' in event ? event.note : event)
+          }
+          boundary = buffer.indexOf('\n\n')
+        }
+      }
+    },
+  },
+  participantMeetings: {
+    get: (token: string) =>
+      request<ParticipantMeeting>(`/participant-meetings/${token}`, {}, false),
   },
 }

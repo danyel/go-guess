@@ -767,6 +767,33 @@ td small {
 .button.danger {
   color: #934141;
 }
+.button.pass {
+  color: #0b573c;
+  background: #d9ef4d;
+  border-color: #bed338;
+}
+.button.fail {
+  color: white;
+  background: #a43d3d;
+}
+.status-passed,
+.status-accepted,
+.status-started,
+.status-completed {
+  color: #13704d;
+  background: #e3f5ed;
+}
+.status-failed,
+.status-declined,
+.status-cancelled {
+  color: #934141;
+  background: #f4e7e7;
+}
+.status-pending,
+.status-scheduled {
+  color: #925a09;
+  background: #fff1dc;
+}
 .panel-padding,
 .invite-form {
   padding: 1.2rem 1.5rem;
@@ -908,6 +935,215 @@ td small {
 }
 .answer-review {
   border-top: 1px solid var(--line);
+}
+.outcome-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1.2rem 1.5rem;
+  border-bottom: 1px solid var(--line);
+  background: #f6f9df;
+}
+.outcome-actions > div {
+  margin-right: auto;
+}
+.outcome-actions p {
+  color: var(--muted);
+  margin: 0.2rem 0 0;
+}
+.schedule-form {
+  margin: 1.5rem;
+  border: 2px solid var(--cyan);
+  border-radius: 14px;
+  overflow: hidden;
+  background: white;
+}
+.scheduled-list {
+  display: grid;
+  gap: 0.7rem;
+  padding: 1.5rem;
+  border-top: 1px solid var(--line);
+}
+.scheduled-list > .button {
+  justify-self: start;
+}
+.scheduled-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.scheduled-summary > span {
+  display: flex;
+  flex-direction: column;
+}
+.scheduled-summary small {
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+.interviewer-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.2rem;
+}
+.interviewer-picker legend {
+  margin-bottom: 0.5rem;
+}
+.interviewer-picker label {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.interviewer-picker input {
+  width: auto;
+}
+.interviewer-picker span {
+  display: flex;
+  flex-direction: column;
+}
+.interviewer-picker small {
+  color: var(--muted);
+}
+.shared-document-field {
+  padding: 1rem;
+  border: 2px solid var(--cyan);
+  border-radius: 12px;
+  background: #f2fbfc;
+}
+
+.user-list {
+  padding: 0 1.5rem;
+}
+.user-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.user-row > div {
+  display: flex;
+  flex-direction: column;
+}
+.user-row small {
+  color: var(--muted);
+}
+.meeting-list {
+  display: grid;
+  gap: 1rem;
+}
+.meeting-card {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(260px, 1fr) auto;
+  gap: 1.2rem;
+  align-items: center;
+  padding: 1.3rem 1.5rem;
+  border: 1px solid #e1e9eb;
+  border-radius: var(--radius);
+  background: white;
+  box-shadow: 0 6px 24px rgba(14, 42, 56, 0.04);
+}
+.meeting-card h2 {
+  margin: 0.55rem 0 0.2rem;
+}
+.meeting-card p {
+  color: var(--muted);
+  margin: 0;
+}
+.meeting-facts {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  color: #526872;
+}
+.meeting-facts span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.meeting-actions,
+.session-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+.calendar-day {
+  margin-bottom: 2rem;
+}
+.calendar-day > h2 {
+  color: var(--navy);
+  border-bottom: 2px solid var(--cyan);
+  padding-bottom: 0.65rem;
+}
+.session-actions {
+  margin: 1.2rem 0;
+}
+.session-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+  gap: 1.2rem;
+  margin: 1.2rem 0;
+}
+.shared-document {
+  border: 2px solid var(--cyan);
+}
+.shared-document textarea {
+  font-size: 1rem;
+  margin-bottom: 0.8rem;
+}
+.notes-list {
+  max-height: 440px;
+  overflow-y: auto;
+  padding: 0 1.5rem;
+}
+.note {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.note time {
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-left: 0.6rem;
+}
+.note p {
+  white-space: pre-wrap;
+  margin: 0.45rem 0 0;
+}
+.note-form {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--line);
+}
+.note-form .button {
+  margin-top: 0.6rem;
+}
+.attendee-section {
+  margin-top: 1.2rem;
+}
+.meeting-public-card {
+  padding: clamp(2rem, 6vw, 4rem);
+}
+.meeting-public-card > p {
+  color: var(--muted);
+}
+.meeting-public-card .meeting-facts {
+  margin: 1.6rem 0;
+}
+.public-document {
+  margin-top: 2rem;
+  padding: clamp(1.2rem, 4vw, 2rem);
+  border: 3px solid var(--lime);
+  border-radius: 14px;
+  background: #f9fce8;
+}
+.public-document div {
+  line-height: 1.7;
+  white-space: pre-wrap;
 }
 .review-heading-actions {
   display: flex;
@@ -1610,7 +1846,8 @@ fieldset {
 
 @media (max-width: 1100px) {
   .split-panels,
-  .library-grid {
+  .library-grid,
+  .session-grid {
     grid-template-columns: 1fr;
   }
   .library-form {
@@ -1796,6 +2033,15 @@ fieldset {
   .review-heading-actions {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .outcome-actions,
+  .meeting-card {
+    align-items: stretch;
+    flex-direction: column;
+    display: flex;
+  }
+  .interviewer-picker {
+    grid-template-columns: 1fr;
   }
 }
 

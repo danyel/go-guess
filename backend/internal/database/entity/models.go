@@ -6,6 +6,7 @@ type User struct {
 	ID           uint   `gorm:"primaryKey"`
 	Email        string `gorm:"uniqueIndex;size:320;not null"`
 	PasswordHash string `gorm:"not null"`
+	DisplayName  string `gorm:"size:200;not null"`
 	Role         string `gorm:"size:32;not null"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
@@ -74,6 +75,7 @@ type Invitation struct {
 	ParticipantID   uint   `gorm:"index;not null"`
 	Token           string `gorm:"uniqueIndex;size:64;not null"`
 	Status          string `gorm:"size:32;not null;default:pending"`
+	Outcome         string `gorm:"size:32;not null;default:pending"`
 	DurationMinutes int    `gorm:"not null"`
 	AcceptedAt      *time.Time
 	CompletedAt     *time.Time
@@ -82,6 +84,46 @@ type Invitation struct {
 	Participant     Participant
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+}
+
+type ScheduledInterview struct {
+	ID             uint `gorm:"primaryKey"`
+	JobID          uint `gorm:"index;not null"`
+	InvitationID   uint `gorm:"uniqueIndex;not null"`
+	ParticipantID  uint `gorm:"index;not null"`
+	CreatorID      uint `gorm:"index;not null"`
+	StartsAt       time.Time
+	Location       string `gorm:"size:500;not null"`
+	CandidateToken string `gorm:"uniqueIndex;size:64;not null"`
+	SharedDocument string `gorm:"type:text;not null;default:''"`
+	Status         string `gorm:"size:32;not null;default:scheduled"`
+	Job            JobPosting
+	Invitation     Invitation
+	Participant    Participant
+	Creator        User
+	Attendees      []InterviewAttendee `gorm:"foreignKey:InterviewID;constraint:OnDelete:CASCADE"`
+	Notes          []InterviewNote     `gorm:"foreignKey:InterviewID;constraint:OnDelete:CASCADE"`
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type InterviewAttendee struct {
+	ID          uint   `gorm:"primaryKey"`
+	InterviewID uint   `gorm:"uniqueIndex:interview_user;not null"`
+	UserID      uint   `gorm:"uniqueIndex:interview_user;index;not null"`
+	Status      string `gorm:"size:32;not null;default:invited"`
+	User        User
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type InterviewNote struct {
+	ID          uint   `gorm:"primaryKey"`
+	InterviewID uint   `gorm:"index;not null"`
+	AuthorID    uint   `gorm:"index;not null"`
+	Body        string `gorm:"type:text;not null"`
+	Author      User
+	CreatedAt   time.Time
 }
 
 type InvitationAnswer struct {

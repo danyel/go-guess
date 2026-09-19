@@ -17,9 +17,16 @@ type LoginResponse struct {
 }
 
 type User struct {
-	ID    uint   `json:"id"`
-	Email string `json:"email"`
-	Role  string `json:"role"`
+	ID          uint   `json:"id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"displayName"`
+	Role        string `json:"role"`
+}
+
+type CreateUserRequest struct {
+	Email       string `json:"email"`
+	Password    string `json:"password"`
+	DisplayName string `json:"displayName"`
 }
 
 type JobRequest struct {
@@ -108,6 +115,7 @@ type InvitationResponse struct {
 	ParticipantEmail string     `json:"participantEmail"`
 	Token            string     `json:"token"`
 	Status           string     `json:"status"`
+	Outcome          string     `json:"outcome"`
 	ParticipantURL   string     `json:"participantUrl"`
 	AcceptedAt       *time.Time `json:"acceptedAt,omitempty"`
 	CompletedAt      *time.Time `json:"completedAt,omitempty"`
@@ -146,4 +154,76 @@ type InvitationReviewResponse struct {
 
 type AnswerRequest struct {
 	Answer string `json:"answer"`
+}
+
+type InvitationOutcomeRequest struct {
+	Outcome string `json:"outcome"`
+}
+
+type CreateScheduledInterviewRequest struct {
+	InvitationID   uint      `json:"invitationId"`
+	StartsAt       time.Time `json:"startsAt"`
+	Location       string    `json:"location"`
+	InterviewerIDs []uint    `json:"interviewerIds"`
+	SharedDocument string    `json:"sharedDocument"`
+}
+
+type InterviewStatusRequest struct {
+	Status string `json:"status"`
+}
+
+type InterviewDocumentRequest struct {
+	SharedDocument string `json:"sharedDocument"`
+}
+
+type InterviewNoteRequest struct {
+	Body string `json:"body"`
+}
+
+type AttendeeStatusRequest struct {
+	Status string `json:"status"`
+}
+
+type InterviewAttendeeResponse struct {
+	UserID      uint   `json:"userId"`
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+	Status      string `json:"status"`
+}
+
+type ScheduledInterviewResponse struct {
+	ID              uint                        `json:"id"`
+	JobID           uint                        `json:"jobId"`
+	JobTitle        string                      `json:"jobTitle"`
+	ParticipantID   uint                        `json:"participantId"`
+	ParticipantName string                      `json:"participantName"`
+	StartsAt        time.Time                   `json:"startsAt"`
+	Location        string                      `json:"location"`
+	CandidateToken  string                      `json:"candidateToken"`
+	CandidateURL    string                      `json:"candidateUrl"`
+	SharedDocument  string                      `json:"sharedDocument"`
+	Status          string                      `json:"status"`
+	Attendees       []InterviewAttendeeResponse `json:"attendees"`
+	Notes           []InterviewNoteResponse     `json:"notes"`
+	CreatedAt       time.Time                   `json:"createdAt"`
+	UpdatedAt       time.Time                   `json:"updatedAt"`
+}
+
+type ParticipantMeetingResponse struct {
+	ID              uint      `json:"id"`
+	JobID           uint      `json:"jobId"`
+	JobTitle        string    `json:"jobTitle"`
+	ParticipantName string    `json:"participantName"`
+	StartsAt        time.Time `json:"startsAt"`
+	Location        string    `json:"location"`
+	SharedDocument  string    `json:"sharedDocument"`
+	Status          string    `json:"status"`
+}
+
+type InterviewNoteResponse struct {
+	ID           uint      `json:"id"`
+	AuthorUserID uint      `json:"authorUserId"`
+	AuthorName   string    `json:"authorName"`
+	Body         string    `json:"body"`
+	CreatedAt    time.Time `json:"createdAt"`
 }

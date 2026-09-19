@@ -1,6 +1,7 @@
 package security
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -16,6 +17,22 @@ type Claims struct {
 	Email  string `json:"email"`
 	Role   string `json:"role"`
 	jwt.RegisteredClaims
+}
+
+type claimsContextKey struct{}
+
+func WithClaims(ctx context.Context, claims Claims) context.Context {
+	return context.WithValue(ctx, claimsContextKey{}, claims)
+}
+
+func ClaimsFromContext(ctx context.Context) (Claims, bool) {
+	claims, ok := ctx.Value(claimsContextKey{}).(Claims)
+	return claims, ok
+}
+
+func UserIDFromContext(ctx context.Context) (uint, bool) {
+	claims, ok := ClaimsFromContext(ctx)
+	return claims.UserID, ok && claims.UserID != 0
 }
 
 type ITokenManager interface {

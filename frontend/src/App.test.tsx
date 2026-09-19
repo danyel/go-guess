@@ -58,7 +58,7 @@ function mockApi() {
       if (path === '/api/auth/login')
         return response({
           token: 'jwt-token',
-          user: { id: 1, email: 'admin@example.com', role: 'admin' },
+          user: { id: 1, email: 'admin@example.com', displayName: 'Admin', role: 'admin' },
         })
       if (path === '/api/jobs') return response([job])
       if (path === '/api/participants') return response([participant])
@@ -73,6 +73,7 @@ function mockApi() {
           },
         ])
       if (path === '/api/jobs/7/invitations' && method === 'GET') return response([])
+      if (path === '/api/jobs/7/interviews' && method === 'GET') return response([])
       if (path === '/api/jobs/7/invitations' && method === 'POST')
         return response({
           id: 31,
@@ -110,7 +111,12 @@ function authenticate() {
   sessionStorage.setItem('go-guess-token', 'jwt-token')
   sessionStorage.setItem(
     'go-guess-user',
-    JSON.stringify({ id: 1, email: 'admin@example.com', role: 'admin' }),
+    JSON.stringify({
+      id: 1,
+      email: 'admin@example.com',
+      displayName: 'Admin',
+      role: 'admin',
+    }),
   )
 }
 
@@ -569,5 +575,332 @@ describe('Go Guess frontend', () => {
     expect(screen.getByRole('textbox', { name: 'Review comment' })).toBeInTheDocument()
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '100')
     expect(screen.queryByText(codeQuestion.referenceAnswer)).not.toBeInTheDocument()
+  })
+
+  it('records pass and fail decisions from a completed answer review', async () => {
+    authenticate()
+    const user = userEvent.setup()
+    const completed = {
+      id: 44,
+      jobId: 7,
+      participantId: 3,
+      participantName: 'Amélie Dubois',
+      participantEmail: 'amelie@example.com',
+      token: 'review-token',
+      status: 'completed',
+      outcome: 'pending',
+      participantUrl: '/participant/review-token',
+      acceptedAt: '2026-09-19T10:05:00Z',
+      completedAt: '2026-09-19T10:15:00Z',
+      createdAt: '2026-09-19T10:00:00Z',
+    }
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(input)
+      const method = options?.method ?? 'GET'
+      if (path === '/api/jobs/7/invitations' && method === 'GET') return response([completed])
+      if (path === '/api/jobs/7/invitations/44' && method === 'GET')
+        return response({
+          invitation: completed,
+          job: { ...job, questions: [question] },
+          answers: { '11': 'Retries with jitter.' },
+        })
+      if (path === '/api/jobs/7/invitations/44/outcome' && method === 'PATCH')
+        return response({
+          ...completed,
+          outcome: JSON.parse(String(options?.body)).outcome,
+        })
+      if (!defaultFetch) throw new Error(`Unexpected request: ${path}`)
+      return defaultFetch(input, options)
+    })
+    renderApp('/jobs/7')
+    await user.click(await screen.findByRole('tab', { name: /invitations/i }))
+    await user.click(screen.getByRole('button', { name: 'Review answers' }))
+    await user.click(await screen.findByRole('button', { name: 'Pass candidate' }))
+    await user.click(screen.getByRole('button', { name: 'Fail candidate' }))
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/jobs/7/invitations/44/outcome',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ outcome: 'passed' }) }),
+    )
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/jobs/7/invitations/44/outcome',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ outcome: 'failed' }) }),
+    )
+  })
+
+  it('creates an interview from a passed invitation with co-interviewers and shared documentation', async () => {
+    authenticate()
+    const user = userEvent.setup()
+    const passed = {
+      id: 45,
+      jobId: 7,
+      participantId: 3,
+      participantName: 'Amélie Dubois',
+      participantEmail: 'amelie@example.com',
+      token: 'passed-token',
+      status: 'completed',
+      outcome: 'passed',
+      participantUrl: '/participant/passed-token',
+      acceptedAt: '2026-09-19T10:05:00Z',
+      completedAt: '2026-09-19T10:15:00Z',
+      createdAt: '2026-09-19T10:00:00Z',
+    }
+    const interviewer = {
+      id: 2,
+      email: 'alex@example.com',
+      displayName: 'Alex Morgan',
+      role: 'interviewer',
+    }
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(input)
+      const method = options?.method ?? 'GET'
+      if (path === '/api/jobs/7/invitations' && method === 'GET') return response([passed])
+      if (path === '/api/users') return response([interviewer])
+      if (path === '/api/jobs/7/interviews' && method === 'POST')
+        return response({
+          id: 80,
+          jobId: 7,
+          jobTitle: job.title,
+          participantId: 3,
+          participantName: 'Amélie Dubois',
+          startsAt: '2026-09-22T08:30:00.000Z',
+          location: 'Brussels',
+          status: 'scheduled',
+          candidateToken: 'meeting-token',
+          candidateUrl: '/participant/meeting/meeting-token',
+          sharedDocument: 'Read the architecture brief.',
+          attendees: [],
+          notes: [],
+        })
+      if (!defaultFetch) throw new Error(`Unexpected request: ${path}`)
+      return defaultFetch(input, options)
+    })
+    renderApp('/jobs/7')
+    await user.click(await screen.findByRole('tab', { name: /invitations/i }))
+    await user.click(screen.getByRole('button', { name: 'Schedule Amélie Dubois' }))
+    await user.type(screen.getByLabelText('Date and time'), '2026-09-22T10:30')
+    await user.type(screen.getByLabelText('Location or meeting link'), 'Brussels')
+    await user.click(await screen.findByLabelText(/Alex Morgan/))
+    await user.type(screen.getByLabelText('Shared documentation'), 'Read the architecture brief.')
+    await user.click(screen.getByRole('button', { name: 'Create interview' }))
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/jobs/7/interviews',
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"interviewerIds":[2]'),
+      }),
+    )
+    expect(await screen.findByText(/Brussels/)).toBeInTheDocument()
+    expect(screen.getAllByText('Amélie Dubois')).not.toHaveLength(0)
+  })
+
+  it('lists users and creates a co-interviewer', async () => {
+    authenticate()
+    const user = userEvent.setup()
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(input)
+      const method = options?.method ?? 'GET'
+      if (path === '/api/users' && method === 'GET')
+        return response([
+          { id: 1, email: 'admin@example.com', displayName: 'Admin User', role: 'admin' },
+        ])
+      if (path === '/api/users' && method === 'POST')
+        return response(
+          { id: 2, email: 'sam@example.com', displayName: 'Sam Lee', role: 'interviewer' },
+          201,
+        )
+      if (!defaultFetch) throw new Error(`Unexpected request: ${path}`)
+      return defaultFetch(input, options)
+    })
+    renderApp('/users')
+    expect(await screen.findByText('Admin User')).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Display name'), 'Sam Lee')
+    await user.type(screen.getByLabelText('Email address'), 'sam@example.com')
+    await user.type(screen.getByLabelText('Temporary password'), 'password123')
+    await user.click(screen.getByRole('button', { name: 'Create co-interviewer' }))
+    expect(await screen.findByText('Sam Lee')).toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/users',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({
+          email: 'sam@example.com',
+          password: 'password123',
+          displayName: 'Sam Lee',
+        }),
+      }),
+    )
+  })
+
+  it('accepts and declines interviews from the inbox', async () => {
+    authenticate()
+    const user = userEvent.setup()
+    const scheduled = {
+      id: 80,
+      jobId: 7,
+      jobTitle: job.title,
+      participantId: 3,
+      participantName: 'Amélie Dubois',
+      startsAt: '2026-09-22T08:30:00Z',
+      location: 'Brussels',
+      status: 'pending',
+      candidateToken: 'meeting-token',
+      candidateUrl: '/participant/meeting/meeting-token',
+      sharedDocument: 'Agenda',
+      attendees: [],
+      notes: [],
+    }
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(input)
+      if (path === '/api/inbox' && !options?.method) return response([scheduled])
+      if (path === '/api/inbox/80')
+        return response({ ...scheduled, status: JSON.parse(String(options?.body)).status })
+      if (!defaultFetch) throw new Error(`Unexpected request: ${path}`)
+      return defaultFetch(input, options)
+    })
+    renderApp('/inbox')
+    await user.click(await screen.findByRole('button', { name: 'Accept' }))
+    await user.click(screen.getByRole('button', { name: 'Decline' }))
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/inbox/80',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ status: 'accepted' }) }),
+    )
+    expect(screen.getByText('declined')).toBeInTheDocument()
+  })
+
+  it('groups calendar interviews by date and links to the session', async () => {
+    authenticate()
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
+      if (String(input) === '/api/calendar')
+        return response([
+          {
+            id: 80,
+            jobId: 7,
+            jobTitle: job.title,
+            participantId: 3,
+            participantName: 'Amélie Dubois',
+            startsAt: '2026-09-22T08:30:00Z',
+            location: 'Brussels',
+            status: 'scheduled',
+            candidateToken: 'meeting-token',
+            candidateUrl: '/participant/meeting/meeting-token',
+            sharedDocument: 'Agenda',
+            attendees: [],
+            notes: [],
+          },
+        ])
+      if (!defaultFetch) throw new Error(`Unexpected request: ${String(input)}`)
+      return defaultFetch(input, options)
+    })
+    renderApp('/calendar')
+    expect(await screen.findByText('Amélie Dubois')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Open session' })).toHaveAttribute(
+      'href',
+      '/scheduled-interviews/80',
+    )
+    expect(
+      screen.getByRole('heading', { level: 2, name: /September 22, 2026/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('edits shared documentation and displays notes received over authenticated fetch streaming', async () => {
+    authenticate()
+    const user = userEvent.setup()
+    const scheduled = {
+      id: 80,
+      jobId: 7,
+      jobTitle: job.title,
+      participantId: 3,
+      participantName: 'Amélie Dubois',
+      startsAt: '2026-09-22T08:30:00Z',
+      location: 'Brussels',
+      status: 'started',
+      candidateToken: 'meeting-token',
+      candidateUrl: '/participant/meeting/meeting-token',
+      sharedDocument: 'Original agenda',
+      attendees: [
+        { userId: 2, displayName: 'Alex Morgan', email: 'alex@example.com', status: 'accepted' },
+      ],
+      notes: [],
+    }
+    const liveNote = {
+      id: 9,
+      authorUserId: 2,
+      authorName: 'Alex Morgan',
+      body: 'Strong system design answer.',
+      createdAt: '2026-09-22T08:35:00Z',
+    }
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(input)
+      if (path === '/api/scheduled-interviews/80') return response(scheduled)
+      if (path === '/api/scheduled-interviews/80/notes' && !options?.method) return response([])
+      if (path === '/api/scheduled-interviews/80/document')
+        return response({
+          ...scheduled,
+          sharedDocument: JSON.parse(String(options?.body)).sharedDocument,
+        })
+      if (path === '/api/scheduled-interviews/80/events') {
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(`event: note\ndata: ${JSON.stringify(liveNote)}\n\n`),
+            )
+            controller.close()
+          },
+        })
+        return Promise.resolve(
+          new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }),
+        )
+      }
+      if (!defaultFetch) throw new Error(`Unexpected request: ${path}`)
+      return defaultFetch(input, options)
+    })
+    renderApp('/scheduled-interviews/80')
+    expect(await screen.findByText('Strong system design answer.')).toBeInTheDocument()
+    const document = screen.getByLabelText('Shared documentation')
+    await user.clear(document)
+    await user.type(document, 'Updated candidate exercise')
+    await user.click(screen.getByRole('button', { name: 'Save shared documentation' }))
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/scheduled-interviews/80/document',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ sharedDocument: 'Updated candidate exercise' }),
+      }),
+    )
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/scheduled-interviews/80/events',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Accept: 'text/event-stream' }),
+      }),
+    )
+  })
+
+  it('shows the public participant meeting without internal notes', async () => {
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === '/api/participant-meetings/meeting-token')
+        return response({
+          id: 80,
+          jobTitle: job.title,
+          participantName: 'Amélie Dubois',
+          startsAt: '2026-09-22T08:30:00Z',
+          location: 'Brussels',
+          status: 'scheduled',
+          sharedDocument: 'Please prepare the architecture exercise.',
+        })
+      throw new Error(`Unexpected request: ${String(input)}`)
+    })
+    renderApp('/participant/meeting/meeting-token')
+    expect(await screen.findByRole('heading', { name: job.title })).toBeInTheDocument()
+    expect(screen.getByText('Please prepare the architecture exercise.')).toBeInTheDocument()
+    expect(screen.queryByText(/live notes/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(question.referenceAnswer)).not.toBeInTheDocument()
   })
 })

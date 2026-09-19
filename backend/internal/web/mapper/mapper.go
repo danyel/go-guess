@@ -85,8 +85,61 @@ func InvitationToWeb(value servicemodel.Invitation, frontendURL string) webmodel
 		ID: value.ID, JobID: value.JobID, ParticipantID: value.ParticipantID,
 		ParticipantName: value.ParticipantName, ParticipantEmail: value.ParticipantEmail,
 		Token: value.Token, Status: value.Status,
+		Outcome:        value.Outcome,
 		ParticipantURL: frontendURL + "/participant/" + value.Token,
 		AcceptedAt:     value.AcceptedAt, CompletedAt: value.CompletedAt, CreatedAt: value.CreatedAt,
+	}
+}
+
+func UserToWeb(value servicemodel.User) webmodel.User {
+	return webmodel.User{
+		ID: value.ID, Email: value.Email, DisplayName: value.DisplayName, Role: value.Role,
+	}
+}
+
+func ScheduledInterviewToWeb(
+	value servicemodel.ScheduledInterview, frontendURL string,
+) webmodel.ScheduledInterviewResponse {
+	attendees := make([]webmodel.InterviewAttendeeResponse, len(value.Attendees))
+	for i, attendee := range value.Attendees {
+		attendees[i] = InterviewAttendeeToWeb(attendee)
+	}
+	notes := make([]webmodel.InterviewNoteResponse, len(value.Notes))
+	for i, note := range value.Notes {
+		notes[i] = InterviewNoteToWeb(note)
+	}
+	return webmodel.ScheduledInterviewResponse{
+		ID: value.ID, JobID: value.JobID, JobTitle: value.Job.Title,
+		ParticipantID:   value.ParticipantID,
+		ParticipantName: value.Participant.FirstName + " " + value.Participant.LastName,
+		StartsAt:        value.StartsAt, Location: value.Location, CandidateToken: value.CandidateToken,
+		CandidateURL:   frontendURL + "/participant/meeting/" + value.CandidateToken,
+		SharedDocument: value.SharedDocument, Status: value.Status,
+		Attendees: attendees, Notes: notes,
+		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt,
+	}
+}
+
+func ParticipantMeetingToWeb(value servicemodel.ScheduledInterview) webmodel.ParticipantMeetingResponse {
+	return webmodel.ParticipantMeetingResponse{
+		ID: value.ID, JobID: value.JobID, JobTitle: value.Job.Title,
+		ParticipantName: value.Participant.FirstName + " " + value.Participant.LastName,
+		StartsAt:        value.StartsAt, Location: value.Location,
+		SharedDocument: value.SharedDocument, Status: value.Status,
+	}
+}
+
+func InterviewAttendeeToWeb(value servicemodel.InterviewAttendee) webmodel.InterviewAttendeeResponse {
+	return webmodel.InterviewAttendeeResponse{
+		UserID: value.UserID, DisplayName: value.User.DisplayName,
+		Email: value.User.Email, Status: value.Status,
+	}
+}
+
+func InterviewNoteToWeb(value servicemodel.InterviewNote) webmodel.InterviewNoteResponse {
+	return webmodel.InterviewNoteResponse{
+		ID: value.ID, AuthorUserID: value.AuthorID, AuthorName: value.Author.DisplayName,
+		Body: value.Body, CreatedAt: value.CreatedAt,
 	}
 }
 

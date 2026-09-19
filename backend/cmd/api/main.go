@@ -13,6 +13,7 @@ import (
 	"github.com/danyel/go-guess/backend/internal/config"
 	"github.com/danyel/go-guess/backend/internal/database"
 	"github.com/danyel/go-guess/backend/internal/database/repository"
+	"github.com/danyel/go-guess/backend/internal/eventbus"
 	"github.com/danyel/go-guess/backend/internal/security"
 	"github.com/danyel/go-guess/backend/internal/service"
 	"github.com/danyel/go-guess/backend/internal/web/handler"
@@ -38,8 +39,15 @@ func main() {
 	defer sqlDB.Close()
 
 	store := repository.New(db)
+	bus, err := eventbus.NewAMQPBus(cfg.RabbitMQURL)
+	if err != nil {
+		slog.Error("connect event bus", "error", err)
+		os.Exit(1)
+	}
+	defer bus.Close()
 	tokens := security.NewTokenManager(cfg.JWTSecret, cfg.TokenTTL)
 	invitations := service.NewInvitationService(store, cfg.FrontendURL)
+	interviews := service.NewScheduledInterviewService(store, bus)
 	api := router.New(
 		handler.New(
 			service.NewAuthService(store, tokens),
@@ -47,6 +55,8 @@ func main() {
 			service.NewQuestionService(store),
 			service.NewParticipantService(store),
 			invitations,
+			service.NewUserService(store),
+			interviews,
 			cfg.MaxUploadMB,
 			cfg.FrontendURL,
 		),
@@ -55,7 +65,7 @@ func main() {
 	)
 	server := &http.Server{
 		Addr: cfg.Address, Handler: api, ReadHeaderTimeout: 5 * time.Second,
-		ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second,
+		ReadTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second,
 	}
 
 	go func() {

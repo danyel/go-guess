@@ -21,6 +21,7 @@ var (
 	ErrInvalidQuestion    = errors.New("invalid question")
 	ErrValidation         = errors.New("validation failed")
 	ErrInvalidState       = errors.New("operation is not allowed in the current state")
+	ErrForbidden          = errors.New("operation is forbidden")
 )
 
 const CandidateThreshold = 60.0
@@ -60,6 +61,7 @@ type IInvitationService interface {
 	Accept(context.Context, string) (model.Interview, error)
 	SaveAnswer(context.Context, string, uint, string) error
 	Finish(context.Context, string) (model.Interview, error)
+	SetOutcome(context.Context, uint, uint, string) (model.Invitation, error)
 }
 
 type AuthService struct {
@@ -458,6 +460,25 @@ func (s *InvitationService) Finish(ctx context.Context, token string) (model.Int
 		return model.Interview{}, err
 	}
 	return s.GetInterview(ctx, token)
+}
+
+func (s *InvitationService) SetOutcome(
+	ctx context.Context, jobID, invitationID uint, outcome string,
+) (model.Invitation, error) {
+	switch outcome {
+	case "pending":
+	case "passed", "failed":
+		invitation, err := s.store.GetInvitation(ctx, jobID, invitationID)
+		if err != nil {
+			return model.Invitation{}, err
+		}
+		if invitation.Status != "completed" {
+			return model.Invitation{}, fmt.Errorf("%w: assessment must be completed", ErrInvalidState)
+		}
+	default:
+		return model.Invitation{}, fmt.Errorf("%w: unsupported assessment outcome", ErrValidation)
+	}
+	return s.store.UpdateInvitationOutcome(ctx, jobID, invitationID, outcome)
 }
 
 func interviewExpired(interview model.Interview, now time.Time) bool {

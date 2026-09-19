@@ -6,6 +6,7 @@ type User struct {
 	ID           uint
 	Email        string
 	PasswordHash string
+	DisplayName  string
 	Role         string
 }
 
@@ -69,10 +70,51 @@ type Invitation struct {
 	ParticipantEmail string
 	Token            string
 	Status           string
+	Outcome          string
 	DurationMinutes  int
 	AcceptedAt       *time.Time
 	CompletedAt      *time.Time
 	CreatedAt        time.Time
+}
+
+type ScheduledInterview struct {
+	ID             uint
+	JobID          uint
+	InvitationID   uint
+	ParticipantID  uint
+	CreatorID      uint
+	StartsAt       time.Time
+	Location       string
+	CandidateToken string
+	SharedDocument string
+	Status         string
+	Job            JobPosting
+	Invitation     Invitation
+	Participant    Participant
+	Creator        User
+	Attendees      []InterviewAttendee
+	Notes          []InterviewNote
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type InterviewAttendee struct {
+	ID          uint
+	InterviewID uint
+	UserID      uint
+	Status      string
+	User        User
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type InterviewNote struct {
+	ID          uint
+	InterviewID uint
+	AuthorID    uint
+	Author      User
+	Body        string
+	CreatedAt   time.Time
 }
 
 type Interview struct {

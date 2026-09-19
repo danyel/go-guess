@@ -1,6 +1,9 @@
-INSERT INTO users (email, password_hash, role)
-VALUES ('integration@example.com', crypt('integration-password', gen_salt('bf')), 'interviewer')
-ON CONFLICT (email) DO NOTHING;
+INSERT INTO users (email, password_hash, display_name, role)
+VALUES ('integration@example.com', crypt('integration-password', gen_salt('bf')), 'Integration Interviewer', 'interviewer')
+ON CONFLICT (email) DO UPDATE SET
+    password_hash = EXCLUDED.password_hash,
+    display_name = EXCLUDED.display_name,
+    role = EXCLUDED.role;
 
 INSERT INTO job_postings (title, description, seniority, position, status, duration_minutes)
 SELECT 'Integration Backend Engineer', 'Deterministic job fixture for API and UI integration tests.',

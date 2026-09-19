@@ -3,6 +3,7 @@ export type QuestionType = 'open' | 'multiple_choice' | 'radio' | 'code_review'
 export interface User {
   id: number
   email: string
+  displayName: string
   role: string
 }
 
@@ -67,10 +68,60 @@ export interface Invitation {
   participantEmail: string
   token: string
   status: string
+  outcome: 'pending' | 'passed' | 'failed'
   participantUrl: string
   acceptedAt: string | null
   completedAt: string | null
   createdAt: string
+}
+
+export interface InterviewAttendee {
+  userId: number
+  displayName: string
+  email: string
+  status: string
+}
+
+export interface InterviewNote {
+  id: number
+  authorUserId: number
+  authorName: string
+  body: string
+  createdAt: string
+}
+
+export interface ScheduledInterview {
+  id: number
+  jobId: number
+  jobTitle: string
+  participantId: number
+  participantName: string
+  startsAt: string
+  location: string
+  status: string
+  candidateToken: string
+  candidateUrl: string
+  sharedDocument: string
+  attendees: InterviewAttendee[]
+  notes: InterviewNote[]
+}
+
+export interface CreateScheduledInterviewInput {
+  invitationId: number
+  startsAt: string
+  location: string
+  interviewerIds: number[]
+  sharedDocument: string
+}
+
+export interface ParticipantMeeting {
+  id: number
+  jobTitle: string
+  participantName: string
+  startsAt: string
+  location: string
+  status: string
+  sharedDocument: string
 }
 
 export interface Interview {
