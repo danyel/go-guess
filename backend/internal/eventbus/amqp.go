@@ -10,7 +10,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-const interviewExchange = "go-guess.interview-notes"
+const interviewExchange = "go-guess.interview-events"
 
 type AMQPBus struct {
 	url         string
@@ -18,14 +18,14 @@ type AMQPBus struct {
 	connection  *amqp.Connection
 	publisher   *amqp.Channel
 	consumer    *amqp.Channel
-	subscribers map[chan InterviewNoteEvent]struct{}
+	subscribers map[chan InterviewEvent]struct{}
 	done        chan struct{}
 	closed      bool
 }
 
 func NewAMQPBus(url string) (*AMQPBus, error) {
 	bus := &AMQPBus{
-		url: url, subscribers: make(map[chan InterviewNoteEvent]struct{}), done: make(chan struct{}),
+		url: url, subscribers: make(map[chan InterviewEvent]struct{}), done: make(chan struct{}),
 	}
 	deliveries, err := bus.connect()
 	if err != nil {
@@ -89,10 +89,10 @@ func (b *AMQPBus) connect() (<-chan amqp.Delivery, error) {
 	return deliveries, nil
 }
 
-func (b *AMQPBus) PublishInterviewNote(ctx context.Context, event InterviewNoteEvent) error {
+func (b *AMQPBus) PublishInterviewEvent(ctx context.Context, event InterviewEvent) error {
 	body, err := json.Marshal(event)
 	if err != nil {
-		return fmt.Errorf("encode interview note event: %w", err)
+		return fmt.Errorf("encode interview event: %w", err)
 	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -114,11 +114,11 @@ func (b *AMQPBus) PublishInterviewNote(ctx context.Context, event InterviewNoteE
 	}
 	deliveries, reconnectErr := b.connect()
 	if reconnectErr != nil {
-		return fmt.Errorf("publish interview note: %w; reconnect: %v", err, reconnectErr)
+		return fmt.Errorf("publish interview event: %w; reconnect: %v", err, reconnectErr)
 	}
 	go b.dispatch(deliveries)
 	if err := b.publishConfirmed(ctx, body); err != nil {
-		return fmt.Errorf("publish interview note after reconnect: %w", err)
+		return fmt.Errorf("publish interview event after reconnect: %w", err)
 	}
 	return nil
 }
@@ -136,18 +136,18 @@ func (b *AMQPBus) publishConfirmed(ctx context.Context, body []byte) error {
 		return err
 	}
 	if !acknowledged {
-		return errors.New("RabbitMQ rejected interview note")
+		return errors.New("RabbitMQ rejected interview event")
 	}
 	return nil
 }
 
-func (b *AMQPBus) SubscribeInterviewNotes(ctx context.Context) (<-chan InterviewNoteEvent, error) {
+func (b *AMQPBus) SubscribeInterviewEvents(ctx context.Context) (<-chan InterviewEvent, error) {
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
 		return nil, ErrClosed
 	}
-	ch := make(chan InterviewNoteEvent, 16)
+	ch := make(chan InterviewEvent, 16)
 	b.subscribers[ch] = struct{}{}
 	b.mu.Unlock()
 	go func() {
@@ -171,7 +171,7 @@ func (b *AMQPBus) dispatch(deliveries <-chan amqp.Delivery) {
 			if !ok {
 				return
 			}
-			var event InterviewNoteEvent
+			var event InterviewEvent
 			if json.Unmarshal(delivery.Body, &event) != nil {
 				continue
 			}
@@ -180,6 +180,8 @@ func (b *AMQPBus) dispatch(deliveries <-chan amqp.Delivery) {
 				select {
 				case subscriber <- event:
 				default:
+					delete(b.subscribers, subscriber)
+					close(subscriber)
 				}
 			}
 			b.mu.Unlock()

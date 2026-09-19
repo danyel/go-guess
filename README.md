@@ -10,7 +10,7 @@ timed assessments followed by collaborative interviews.
 - Go 1.27.1 HTTP API using Chi, GORM, PostgreSQL, Goose, bcrypt, and signed JWTs
 - React 19.3, TypeScript, and Vite
 - PostgreSQL 18
-- RabbitMQ 4 for live interview-note fanout
+- RabbitMQ 4 for live interview event fanout
 
 ## Run locally
 
@@ -62,7 +62,7 @@ cd frontend && npm test -- src/app/App.test.tsx -t "filters jobs by title"
 Docker must be available for `make test`. The integration suite starts PostgreSQL
 18 and RabbitMQ 4 in disposable Testcontainers, applies every Goose migration,
 loads deterministic test fixtures, exercises login and the complete assessment and
-interview workflow, verifies live note fanout, and removes both containers
+interview workflow, verifies live note and document fanout, and removes both containers
 afterward.
 
 Start an isolated application stack populated with test data for manual UI testing:
@@ -92,11 +92,11 @@ Completed assessments can be marked passed or failed. A passed candidate can be
 scheduled for an interview with a date, location or meeting link, shared document,
 and selected co-interviewers. Each interviewer has an inbox for invitations and a
 calendar for accepted interviews. During a started interview, attendees can add
-private notes; the API persists each note and publishes it through a durable
-RabbitMQ fanout exchange so connected interviewer sessions receive it over an
-authenticated server-sent-event stream. The candidate receives a separate opaque
-meeting link that exposes the schedule and shared document, but never private notes
-or assessment reference answers.
+private notes. Notes and shared-document changes are published through a durable
+RabbitMQ fanout exchange and delivered over server-sent-event streams. Authenticated
+interviewer sessions receive both event types; the candidate's opaque meeting link
+uses a token-authorized stream that receives shared-document updates but never
+private notes or assessment reference answers.
 
 Development fixtures include `co-interviewer@go-guess.local` with password
 `admin123`. Additional co-interviewers can be created from the Users screen.

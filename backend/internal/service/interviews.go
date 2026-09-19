@@ -30,7 +30,8 @@ type IScheduledInterviewService interface {
 	ListInbox(context.Context, uint) ([]model.ScheduledInterview, error)
 	UpdateInbox(context.Context, uint, uint, string) (model.ScheduledInterview, error)
 	ListCalendar(context.Context, uint) ([]model.ScheduledInterview, error)
-	Subscribe(context.Context, uint, uint) (<-chan eventbus.InterviewNoteEvent, error)
+	Subscribe(context.Context, uint, uint) (<-chan eventbus.InterviewEvent, error)
+	SubscribeParticipant(context.Context, string) (<-chan eventbus.InterviewEvent, error)
 }
 
 type UserService struct {
@@ -174,7 +175,16 @@ func (s *ScheduledInterviewService) UpdateDocument(
 	if _, err := s.Get(ctx, userID, interviewID); err != nil {
 		return model.ScheduledInterview{}, err
 	}
-	return s.store.UpdateScheduledInterviewDocument(ctx, interviewID, document)
+	updated, err := s.store.UpdateScheduledInterviewDocument(ctx, interviewID, document)
+	if err != nil {
+		return model.ScheduledInterview{}, err
+	}
+	if err := s.bus.PublishInterviewEvent(ctx, eventbus.InterviewEvent{
+		Type: "document.updated", InterviewID: interviewID, SharedDocument: updated.SharedDocument,
+	}); err != nil {
+		return model.ScheduledInterview{}, fmt.Errorf("publish persisted interview document: %w", err)
+	}
+	return updated, nil
 }
 
 func (s *ScheduledInterviewService) ListNotes(
@@ -209,9 +219,12 @@ func (s *ScheduledInterviewService) CreateNote(
 		}
 		return model.InterviewNote{}, err
 	}
-	if err := s.bus.PublishInterviewNote(ctx, eventbus.InterviewNoteEvent{
-		InterviewID: note.InterviewID, ID: note.ID, AuthorUserID: note.AuthorID,
-		AuthorName: note.Author.DisplayName, Body: note.Body, CreatedAt: note.CreatedAt,
+	if err := s.bus.PublishInterviewEvent(ctx, eventbus.InterviewEvent{
+		Type: "note.created", InterviewID: note.InterviewID,
+		Note: &eventbus.InterviewNoteEvent{
+			ID: note.ID, AuthorUserID: note.AuthorID, AuthorName: note.Author.DisplayName,
+			Body: note.Body, CreatedAt: note.CreatedAt,
+		},
 	}); err != nil {
 		return model.InterviewNote{}, fmt.Errorf("publish persisted interview note: %w", err)
 	}
@@ -244,11 +257,64 @@ func (s *ScheduledInterviewService) ListCalendar(
 
 func (s *ScheduledInterviewService) Subscribe(
 	ctx context.Context, userID, interviewID uint,
-) (<-chan eventbus.InterviewNoteEvent, error) {
+) (<-chan eventbus.InterviewEvent, error) {
 	if _, err := s.Get(ctx, userID, interviewID); err != nil {
 		return nil, err
 	}
-	return s.bus.SubscribeInterviewNotes(ctx)
+	return s.subscribeToInterview(ctx, interviewID, false)
+}
+
+func (s *ScheduledInterviewService) SubscribeParticipant(
+	ctx context.Context, token string,
+) (<-chan eventbus.InterviewEvent, error) {
+	interview, err := s.GetParticipantMeeting(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	return s.subscribeToInterview(ctx, interview.ID, true)
+}
+
+func (s *ScheduledInterviewService) subscribeToInterview(
+	ctx context.Context, interviewID uint, documentsOnly bool,
+) (<-chan eventbus.InterviewEvent, error) {
+	events, err := s.bus.SubscribeInterviewEvents(ctx)
+	if err != nil {
+		return nil, err
+	}
+	current, err := s.store.GetScheduledInterview(ctx, interviewID)
+	if err != nil {
+		return nil, err
+	}
+	filtered := make(chan eventbus.InterviewEvent, 16)
+	filtered <- eventbus.InterviewEvent{
+		Type: "document.updated", InterviewID: interviewID,
+		SharedDocument: current.SharedDocument,
+	}
+	go func() {
+		defer close(filtered)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case event, ok := <-events:
+				if !ok {
+					return
+				}
+				if event.InterviewID != interviewID {
+					continue
+				}
+				if documentsOnly && event.Type != "document.updated" {
+					continue
+				}
+				select {
+				case filtered <- event:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+	return filtered, nil
 }
 
 func isAttendee(value model.ScheduledInterview, userID uint) bool {

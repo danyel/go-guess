@@ -8,7 +8,6 @@ import (
 )
 
 type InterviewNoteEvent struct {
-	InterviewID  uint      `json:"interviewId"`
 	ID           uint      `json:"id"`
 	AuthorUserID uint      `json:"authorUserId"`
 	AuthorName   string    `json:"authorName"`
@@ -16,9 +15,16 @@ type InterviewNoteEvent struct {
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
+type InterviewEvent struct {
+	Type           string              `json:"type"`
+	InterviewID    uint                `json:"interviewId"`
+	Note           *InterviewNoteEvent `json:"note,omitempty"`
+	SharedDocument string              `json:"sharedDocument,omitempty"`
+}
+
 type IEventBus interface {
-	PublishInterviewNote(context.Context, InterviewNoteEvent) error
-	SubscribeInterviewNotes(context.Context) (<-chan InterviewNoteEvent, error)
+	PublishInterviewEvent(context.Context, InterviewEvent) error
+	SubscribeInterviewEvents(context.Context) (<-chan InterviewEvent, error)
 	Close() error
 }
 
@@ -26,15 +32,15 @@ var ErrClosed = errors.New("event bus is closed")
 
 type MemoryBus struct {
 	mu          sync.RWMutex
-	subscribers map[chan InterviewNoteEvent]struct{}
+	subscribers map[chan InterviewEvent]struct{}
 	closed      bool
 }
 
 func NewMemoryBus() *MemoryBus {
-	return &MemoryBus{subscribers: make(map[chan InterviewNoteEvent]struct{})}
+	return &MemoryBus{subscribers: make(map[chan InterviewEvent]struct{})}
 }
 
-func (b *MemoryBus) PublishInterviewNote(ctx context.Context, event InterviewNoteEvent) error {
+func (b *MemoryBus) PublishInterviewEvent(ctx context.Context, event InterviewEvent) error {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	if b.closed {
@@ -50,13 +56,13 @@ func (b *MemoryBus) PublishInterviewNote(ctx context.Context, event InterviewNot
 	return nil
 }
 
-func (b *MemoryBus) SubscribeInterviewNotes(ctx context.Context) (<-chan InterviewNoteEvent, error) {
+func (b *MemoryBus) SubscribeInterviewEvents(ctx context.Context) (<-chan InterviewEvent, error) {
 	b.mu.Lock()
 	if b.closed {
 		b.mu.Unlock()
 		return nil, ErrClosed
 	}
-	ch := make(chan InterviewNoteEvent, 16)
+	ch := make(chan InterviewEvent, 16)
 	b.subscribers[ch] = struct{}{}
 	b.mu.Unlock()
 	go func() {

@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/danyel/go-guess/backend/internal/database/repository"
+	"github.com/danyel/go-guess/backend/internal/eventbus"
 	"github.com/danyel/go-guess/backend/internal/security"
 	"github.com/danyel/go-guess/backend/internal/service"
 	servicemodel "github.com/danyel/go-guess/backend/internal/service/model"
@@ -511,6 +512,20 @@ func (h *Handler) InterviewEvents(w http.ResponseWriter, r *http.Request) {
 	if handleServiceError(w, r, err) {
 		return
 	}
+	streamInterviewEvents(w, r, events)
+}
+
+func (h *Handler) ParticipantMeetingEvents(w http.ResponseWriter, r *http.Request) {
+	events, err := h.interviews.SubscribeParticipant(r.Context(), chi.URLParam(r, "token"))
+	if handleServiceError(w, r, err) {
+		return
+	}
+	streamInterviewEvents(w, r, events)
+}
+
+func streamInterviewEvents(
+	w http.ResponseWriter, r *http.Request, events <-chan eventbus.InterviewEvent,
+) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		internalError(w, r, errors.New("streaming is unsupported"))
@@ -519,24 +534,29 @@ func (h *Handler) InterviewEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
+	heartbeat := time.NewTicker(20 * time.Second)
+	defer heartbeat.Stop()
 	for {
 		select {
 		case <-r.Context().Done():
 			return
+		case <-heartbeat.C:
+			if _, err := io.WriteString(w, ": keepalive\n\n"); err != nil {
+				return
+			}
+			flusher.Flush()
 		case event, ok := <-events:
 			if !ok {
 				return
-			}
-			if event.InterviewID != idParam(r) {
-				continue
 			}
 			payload, err := json.Marshal(event)
 			if err != nil {
 				return
 			}
-			if _, err := fmt.Fprintf(w, "event: interview-note\ndata: %s\n\n", payload); err != nil {
+			if _, err := fmt.Fprintf(w, "event: interview-event\ndata: %s\n\n", payload); err != nil {
 				return
 			}
 			flusher.Flush()

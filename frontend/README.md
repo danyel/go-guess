@@ -71,6 +71,7 @@ Supported routes:
 - `GET|POST /api/scheduled-interviews/:id/notes`
 - `GET /api/scheduled-interviews/:id/events` (authenticated fetch-based SSE)
 - `GET /api/participant-meetings/:token` (public)
+- `GET /api/participant-meetings/:token/events` (token-authorized SSE)
 
 Participant creation uses multipart fields `firstName`, `lastName`, `birthday`, `email`,
 `contactInfo`, `photo`, and `cv`.
@@ -96,9 +97,9 @@ The authenticated workspace also includes:
 - **Inbox** for accepting or declining interview assignments.
 - **Calendar** for interviews grouped by date.
 - **Interviewer sessions** for changing status, editing prominent shared documentation, and
-  posting private notes while an interview is started. Notes arrive live through an authenticated
-  streaming `fetch`; the app intentionally does not use `EventSource`, because the request needs
-  the JWT authorization header.
+  posting private notes while an interview is started. Notes and shared-document changes arrive
+  live through an authenticated streaming `fetch`; the app intentionally does not use
+  `EventSource`, because the request needs the JWT authorization header.
 
 Participants open the generated `/participant/:invitationId` URL without signing in. The opaque
 invitation ID authorizes the existing `/api/interviews/:token` API. Code-review questions are shown
@@ -108,8 +109,9 @@ derived from the backend `acceptedAt` timestamp plus the job duration so refresh
 it. Questions stay hidden until the participant explicitly accepts the invitation.
 
 Scheduled candidates use `/participant/meeting/:token`. This public view shows the interview date,
-location, status, and read-only shared documentation. It never renders interviewer notes or
-assessment reference answers.
+location, status, and read-only shared documentation. A token-authorized event stream updates the
+document immediately when an interviewer saves it in another browser. The participant view never
+receives interviewer notes or assessment reference answers.
 
 ## Container
 

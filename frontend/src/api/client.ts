@@ -6,6 +6,7 @@ import type {
   CreateQuestionInput,
   CreateScheduledInterviewInput,
   Interview,
+  InterviewEvent,
   Invitation,
   Job,
   JobStatus,
@@ -95,6 +96,56 @@ async function requestBlob(path: string): Promise<Blob> {
   if (!response.ok)
     throw new ApiError(`Request failed with status ${response.status}`, response.status)
   return response.blob()
+}
+
+async function subscribeToInterviewEvents(
+  path: string,
+  onEvent: (event: InterviewEvent) => void,
+  signal: AbortSignal,
+  protectedRequest: boolean,
+  onConnectionError?: (error: unknown) => void,
+) {
+  while (!signal.aborted) {
+    try {
+      const token = authStorage.token()
+      const response = await fetch(`/api${path}`, {
+        headers: {
+          Accept: 'text/event-stream',
+          ...(protectedRequest && token ? { Authorization: 'Bearer ' + token } : {}),
+        },
+        signal,
+      })
+      if (!response.ok || !response.body)
+        throw new ApiError(`Live updates failed with status ${response.status}`, response.status)
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      while (!signal.aborted) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
+        let boundary = buffer.indexOf('\n\n')
+        while (boundary >= 0) {
+          const message = buffer.slice(0, boundary)
+          buffer = buffer.slice(boundary + 2)
+          const data = message
+            .split('\n')
+            .filter((line) => line.startsWith('data:'))
+            .map((line) => line.slice(5).trimStart())
+            .join('\n')
+          if (data) onEvent(JSON.parse(data) as InterviewEvent)
+          boundary = buffer.indexOf('\n\n')
+        }
+      }
+    } catch (error) {
+      if (signal.aborted) return
+      if (error instanceof ApiError && error.status >= 400 && error.status < 500) throw error
+      onConnectionError?.(error)
+    }
+    if (!signal.aborted) {
+      await new Promise((resolve) => window.setTimeout(resolve, 1000))
+    }
+  }
 }
 
 export const api = {
@@ -226,44 +277,35 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ body }),
       }),
-    subscribe: async (id: number, onNote: (note: InterviewNote) => void, signal: AbortSignal) => {
-      const token = authStorage.token()
-      const response = await fetch(`/api/scheduled-interviews/${id}/events`, {
-        headers: {
-          Accept: 'text/event-stream',
-          ...(token ? { Authorization: 'Bearer ' + token } : {}),
-        },
+    subscribe: (
+      id: number,
+      onEvent: (event: InterviewEvent) => void,
+      signal: AbortSignal,
+      onConnectionError?: (error: unknown) => void,
+    ) =>
+      subscribeToInterviewEvents(
+        `/scheduled-interviews/${id}/events`,
+        onEvent,
         signal,
-      })
-      if (!response.ok || !response.body)
-        throw new ApiError(`Live updates failed with status ${response.status}`, response.status)
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      while (!signal.aborted) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, '\n')
-        let boundary = buffer.indexOf('\n\n')
-        while (boundary >= 0) {
-          const message = buffer.slice(0, boundary)
-          buffer = buffer.slice(boundary + 2)
-          const data = message
-            .split('\n')
-            .filter((line) => line.startsWith('data:'))
-            .map((line) => line.slice(5).trimStart())
-            .join('\n')
-          if (data) {
-            const event = JSON.parse(data) as InterviewNote | { note: InterviewNote }
-            onNote('note' in event ? event.note : event)
-          }
-          boundary = buffer.indexOf('\n\n')
-        }
-      }
-    },
+        true,
+        onConnectionError,
+      ),
   },
   participantMeetings: {
     get: (token: string) =>
       request<ParticipantMeeting>(`/participant-meetings/${token}`, {}, false),
+    subscribe: (
+      token: string,
+      onEvent: (event: InterviewEvent) => void,
+      signal: AbortSignal,
+      onConnectionError?: (error: unknown) => void,
+    ) =>
+      subscribeToInterviewEvents(
+        `/participant-meetings/${token}/events`,
+        onEvent,
+        signal,
+        false,
+        onConnectionError,
+      ),
   },
 }

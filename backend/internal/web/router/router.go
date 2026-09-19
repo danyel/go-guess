@@ -23,6 +23,7 @@ func New(h *handler.Handler, tokens security.ITokenManager, frontendURL string) 
 	router.Put("/api/interviews/{token}/answers/{questionId}", h.SaveAnswer)
 	router.Post("/api/interviews/{token}/finish", h.FinishInterview)
 	router.Get("/api/participant-meetings/{token}", h.GetParticipantMeeting)
+	router.Get("/api/participant-meetings/{token}/events", h.ParticipantMeetingEvents)
 	router.Group(func(protected chi.Router) {
 		protected.Use(authenticate(tokens))
 		protected.Get("/api/jobs", h.ListJobs)

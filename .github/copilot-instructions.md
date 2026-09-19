@@ -33,10 +33,11 @@ The required toolchain is Go 1.27.1 and React 19.3 with TypeScript/Vite. Use
   `internal/database/{repository,mapper,entity}`. Never expose GORM entities from
   handlers.
 - `backend/cmd/seed` applies embedded environment-aware fixtures.
-- `backend/internal/eventbus` publishes persisted interview notes to the durable
-  `go-guess.interview-notes` RabbitMQ fanout exchange. Each API instance consumes
-  through its own exclusive queue and distributes events to authenticated SSE
-  subscribers.
+- `backend/internal/eventbus` publishes note and shared-document events to the
+  durable `go-guess.interview-events` RabbitMQ fanout exchange. Each API instance
+  consumes through its own exclusive queue and distributes interview-filtered
+  events to authenticated interviewer SSE streams or token-authorized participant
+  streams.
 - `frontend/src/app` owns application routing and providers, `src/features` groups
   feature pages and components, `src/components` contains reusable UI,
   `src/api/client.ts` is the typed HTTP boundary, `src/types` contains client

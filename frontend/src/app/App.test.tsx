@@ -853,7 +853,17 @@ describe('Go Guess frontend', () => {
         const stream = new ReadableStream({
           start(controller) {
             controller.enqueue(
-              new TextEncoder().encode(`event: note\ndata: ${JSON.stringify(liveNote)}\n\n`),
+              new TextEncoder().encode(
+                `event: interview-event\ndata: ${JSON.stringify({
+                  type: 'note.created',
+                  interviewId: 80,
+                  note: liveNote,
+                })}\n\nevent: interview-event\ndata: ${JSON.stringify({
+                  type: 'document.updated',
+                  interviewId: 80,
+                  sharedDocument: 'Remote agenda',
+                })}\n\n`,
+              ),
             )
             controller.close()
           },
@@ -867,6 +877,7 @@ describe('Go Guess frontend', () => {
     })
     renderApp('/scheduled-interviews/80')
     expect(await screen.findByText('Strong system design answer.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Shared documentation')).toHaveValue('Remote agenda')
     await user.click(screen.getByRole('button', { name: 'Copy participant interview link' }))
     expect(writeText).toHaveBeenCalledWith('/participant/meeting/meeting-token')
     expect(
@@ -903,11 +914,30 @@ describe('Go Guess frontend', () => {
           status: 'scheduled',
           sharedDocument: 'Please prepare the architecture exercise.',
         })
+      if (String(input) === '/api/participant-meetings/meeting-token/events') {
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                `event: interview-event\ndata: ${JSON.stringify({
+                  type: 'document.updated',
+                  interviewId: 80,
+                  sharedDocument: 'The architecture exercise changed live.',
+                })}\n\n`,
+              ),
+            )
+            controller.close()
+          },
+        })
+        return Promise.resolve(
+          new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } }),
+        )
+      }
       throw new Error(`Unexpected request: ${String(input)}`)
     })
     renderApp('/participant/meeting/meeting-token')
     expect(await screen.findByRole('heading', { name: job.title })).toBeInTheDocument()
-    expect(screen.getByText('Please prepare the architecture exercise.')).toBeInTheDocument()
+    expect(await screen.findByText('The architecture exercise changed live.')).toBeInTheDocument()
     expect(screen.queryByText(/live notes/i)).not.toBeInTheDocument()
     expect(screen.queryByText(question.referenceAnswer)).not.toBeInTheDocument()
   })

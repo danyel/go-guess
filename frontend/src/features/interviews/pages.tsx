@@ -146,6 +146,7 @@ export function ScheduledInterviewPage() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const loadedInterviewID = interview?.id
 
   useEffect(() => {
     let active = true
@@ -163,23 +164,34 @@ export function ScheduledInterviewPage() {
   }, [id])
 
   useEffect(() => {
-    if (interview?.status !== 'started') return
+    if (!loadedInterviewID) return
     const controller = new AbortController()
     void api.scheduledInterviews
       .subscribe(
         id,
-        (note) => {
-          setNotes((current) =>
-            current.some((item) => item.id === note.id) ? current : [...current, note],
-          )
+        (event) => {
+          if (event.type === 'note.created') {
+            setNotes((current) =>
+              current.some((item) => item.id === event.note.id)
+                ? current
+                : [...current, event.note],
+            )
+          }
+          if (event.type === 'document.updated') {
+            setDocument(event.sharedDocument)
+            setInterview((current) =>
+              current ? { ...current, sharedDocument: event.sharedDocument } : current,
+            )
+          }
         },
         controller.signal,
+        (value) => setError(message(value)),
       )
       .catch((value) => {
         if (!controller.signal.aborted) setError(message(value))
       })
     return () => controller.abort()
-  }, [id, interview?.status])
+  }, [id, loadedInterviewID])
 
   async function setStatus(status: string) {
     setError('')
@@ -363,10 +375,44 @@ export function ParticipantMeetingPage() {
   const [meeting, setMeeting] = useState<ParticipantMeeting>()
   const [error, setError] = useState('')
   useEffect(() => {
+    let active = true
+    let latestDocument: string | undefined
+    const controller = new AbortController()
+    void api.participantMeetings
+      .subscribe(
+        token,
+        (event) => {
+          if (event.type !== 'document.updated') return
+          latestDocument = event.sharedDocument
+          setMeeting((current) =>
+            current ? { ...current, sharedDocument: event.sharedDocument } : current,
+          )
+        },
+        controller.signal,
+        (value) => {
+          if (active) setError(message(value))
+        },
+      )
+      .catch((value) => {
+        if (active && !controller.signal.aborted) setError(message(value))
+      })
     void api.participantMeetings
       .get(token)
-      .then(setMeeting)
-      .catch((value) => setError(message(value)))
+      .then((value) => {
+        if (active) {
+          setMeeting({
+            ...value,
+            sharedDocument: latestDocument ?? value.sharedDocument,
+          })
+        }
+      })
+      .catch((value) => {
+        if (active) setError(message(value))
+      })
+    return () => {
+      active = false
+      controller.abort()
+    }
   }, [token])
   return (
     <main className="public-interview">

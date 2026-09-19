@@ -90,6 +90,18 @@ export interface InterviewNote {
   createdAt: string
 }
 
+export type InterviewEvent =
+  | {
+      type: 'note.created'
+      interviewId: number
+      note: InterviewNote
+    }
+  | {
+      type: 'document.updated'
+      interviewId: number
+      sharedDocument: string
+    }
+
 export interface ScheduledInterview {
   id: number
   jobId: number

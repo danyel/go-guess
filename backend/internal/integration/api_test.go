@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"database/sql"
@@ -313,13 +314,55 @@ func TestCompleteInterviewWorkflow(t *testing.T) {
 	requestJSON(t, http.MethodPatch, fmt.Sprintf("/api/scheduled-interviews/%d/status", scheduled.ID),
 		login.Token, map[string]any{"status": "started"}, http.StatusOK, &scheduled)
 
-	subscriptionContext, cancelSubscriptions := context.WithCancel(context.Background())
-	defer cancelSubscriptions()
-	firstEvents, err := testBus.SubscribeInterviewNotes(subscriptionContext)
+	streamContext, cancelStream := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelStream()
+	streamRequest, err := http.NewRequestWithContext(
+		streamContext, http.MethodGet,
+		testServer.URL+"/api/participant-meetings/"+scheduled.CandidateToken+"/events", nil,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondEvents, err := testBus.SubscribeInterviewNotes(subscriptionContext)
+	streamResponse, err := http.DefaultClient.Do(streamRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer streamResponse.Body.Close()
+	if streamResponse.StatusCode != http.StatusOK {
+		t.Fatalf("candidate event stream returned %d", streamResponse.StatusCode)
+	}
+	const updatedDocument = "Updated collaborative exercise"
+	requestJSON(t, http.MethodPatch, fmt.Sprintf("/api/scheduled-interviews/%d/document", scheduled.ID),
+		login.Token, map[string]any{"sharedDocument": updatedDocument}, http.StatusOK, &scheduled)
+	var documentEvent eventbus.InterviewEvent
+	scanner := bufio.NewScanner(streamResponse.Body)
+	for scanner.Scan() {
+		if strings.HasPrefix(scanner.Text(), "data: ") {
+			if err := json.Unmarshal([]byte(strings.TrimPrefix(scanner.Text(), "data: ")), &documentEvent); err != nil {
+				t.Fatal(err)
+			}
+			if documentEvent.Type == "document.updated" &&
+				documentEvent.SharedDocument == updatedDocument {
+				break
+			}
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if documentEvent.Type != "document.updated" ||
+		documentEvent.InterviewID != scheduled.ID ||
+		documentEvent.SharedDocument != updatedDocument {
+		t.Fatalf("candidate received unexpected document event: %#v", documentEvent)
+	}
+
+	subscriptionContext, cancelSubscriptions := context.WithCancel(context.Background())
+	defer cancelSubscriptions()
+	firstEvents, err := testBus.SubscribeInterviewEvents(subscriptionContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondEvents, err := testBus.SubscribeInterviewEvents(subscriptionContext)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,10 +374,11 @@ func TestCompleteInterviewWorkflow(t *testing.T) {
 	if note.AuthorUserID != coInterviewer.ID || note.AuthorName != "Co Interviewer" {
 		t.Fatalf("unexpected note response: %#v", note)
 	}
-	for index, events := range []<-chan eventbus.InterviewNoteEvent{firstEvents, secondEvents} {
+	for index, events := range []<-chan eventbus.InterviewEvent{firstEvents, secondEvents} {
 		select {
 		case received := <-events:
-			if received.ID != note.ID || received.AuthorUserID != coInterviewer.ID {
+			if received.Type != "note.created" || received.Note == nil ||
+				received.Note.ID != note.ID || received.Note.AuthorUserID != coInterviewer.ID {
 				t.Fatalf("subscriber %d received unexpected RabbitMQ event: %#v", index+1, received)
 			}
 			encoded, err := json.Marshal(received)
@@ -358,7 +402,7 @@ func TestCompleteInterviewWorkflow(t *testing.T) {
 	var meeting webmodel.ParticipantMeetingResponse
 	body := requestJSON(t, http.MethodGet, "/api/participant-meetings/"+scheduled.CandidateToken,
 		"", nil, http.StatusOK, &meeting)
-	if meeting.SharedDocument != "Collaborative notes" ||
+	if meeting.SharedDocument != updatedDocument ||
 		bytes.Contains(body, []byte("participantEmail")) ||
 		bytes.Contains(body, []byte("referenceAnswer")) ||
 		bytes.Contains(body, []byte(`"notes":`)) {

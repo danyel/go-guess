@@ -391,7 +391,7 @@ func TestCreateNotePersistsThenPublishesSafeEvent(t *testing.T) {
 		},
 	}
 	bus := eventbus.NewMemoryBus()
-	events, err := bus.SubscribeInterviewNotes(context.Background())
+	events, err := bus.SubscribeInterviewEvents(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,8 +401,67 @@ func TestCreateNotePersistsThenPublishesSafeEvent(t *testing.T) {
 		t.Fatal(err)
 	}
 	event := <-events
-	if note.Body != "useful note" || event.ID != note.ID || event.AuthorName != "Ada" {
+	if note.Body != "useful note" || event.Type != "note.created" || event.Note == nil ||
+		event.Note.ID != note.ID || event.Note.AuthorName != "Ada" {
 		t.Fatalf("unexpected note/event: %#v %#v", note, event)
+	}
+}
+
+func TestUpdateDocumentPublishesEvent(t *testing.T) {
+	store := &scheduledStore{
+		fakeStore: &fakeStore{},
+		interview: model.ScheduledInterview{
+			ID: 9, Status: "scheduled", Attendees: []model.InterviewAttendee{{UserID: 1}},
+		},
+	}
+	bus := eventbus.NewMemoryBus()
+	events, err := bus.SubscribeInterviewEvents(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	interviews := NewScheduledInterviewService(store, bus)
+	updated, err := interviews.UpdateDocument(context.Background(), 1, 9, "New agenda")
+	if err != nil {
+		t.Fatal(err)
+	}
+	event := <-events
+	if updated.SharedDocument != "New agenda" || event.Type != "document.updated" ||
+		event.InterviewID != 9 || event.SharedDocument != "New agenda" {
+		t.Fatalf("unexpected document/event: %#v %#v", updated, event)
+	}
+}
+
+func TestParticipantSubscriptionFiltersPrivateNotes(t *testing.T) {
+	bus := eventbus.NewMemoryBus()
+	interviews := NewScheduledInterviewService(&fakeStore{}, bus)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events, err := interviews.SubscribeParticipant(ctx, "candidate-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	initial := <-events
+	if initial.Type != "document.updated" {
+		t.Fatalf("participant did not receive initial document snapshot: %#v", initial)
+	}
+	if err := bus.PublishInterviewEvent(ctx, eventbus.InterviewEvent{
+		Type: "note.created", InterviewID: 0,
+		Note: &eventbus.InterviewNoteEvent{ID: 4, Body: "private"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := bus.PublishInterviewEvent(ctx, eventbus.InterviewEvent{
+		Type: "document.updated", InterviewID: 0, SharedDocument: "candidate-safe",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case event := <-events:
+		if event.Type != "document.updated" || event.SharedDocument != "candidate-safe" {
+			t.Fatalf("participant received unexpected event: %#v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("participant did not receive document event")
 	}
 }
 

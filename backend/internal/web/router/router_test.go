@@ -128,8 +128,11 @@ func (interviewStub) UpdateInbox(context.Context, uint, uint, string) (model.Sch
 func (interviewStub) ListCalendar(context.Context, uint) ([]model.ScheduledInterview, error) {
 	return nil, nil
 }
-func (interviewStub) Subscribe(context.Context, uint, uint) (<-chan eventbus.InterviewNoteEvent, error) {
-	return make(chan eventbus.InterviewNoteEvent), nil
+func (interviewStub) Subscribe(context.Context, uint, uint) (<-chan eventbus.InterviewEvent, error) {
+	return make(chan eventbus.InterviewEvent), nil
+}
+func (interviewStub) SubscribeParticipant(context.Context, string) (<-chan eventbus.InterviewEvent, error) {
+	return make(chan eventbus.InterviewEvent), nil
 }
 
 type interviewCapture struct {
