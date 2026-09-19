@@ -66,9 +66,17 @@ func ParticipantToWeb(value servicemodel.Participant) webmodel.ParticipantRespon
 }
 
 func CandidateToWeb(value servicemodel.CandidateMatch) webmodel.CandidateResponse {
+	matched := value.Matched
+	if matched == nil {
+		matched = []string{}
+	}
+	missing := value.Missing
+	if missing == nil {
+		missing = []string{}
+	}
 	return webmodel.CandidateResponse{
 		Participant: ParticipantToWeb(value.Participant), Score: value.Score,
-		Matched: value.Matched, Missing: value.Missing,
+		Matched: matched, Missing: missing,
 	}
 }
 

@@ -69,7 +69,7 @@ function mockApi() {
             participant,
             score: 90,
             matchedTraits: ['Go'],
-            missingTraits: [],
+            missingTraits: null,
           },
         ])
       if (path === '/api/jobs/7/invitations' && method === 'GET') return response([])
@@ -127,6 +127,17 @@ describe('Go Guess frontend', () => {
     vi.useRealTimers()
     sessionStorage.clear()
     mockApi()
+  })
+
+  it('renders candidate matches when an older API returns null trait arrays', async () => {
+    authenticate()
+    const user = userEvent.setup()
+    renderApp('/jobs/7')
+
+    await user.click(await screen.findByRole('tab', { name: /candidate match/i }))
+
+    expect(await screen.findByText('90%')).toBeInTheDocument()
+    expect(screen.getByText('Missing').nextElementSibling).toHaveTextContent('0')
   })
 
   it('persists login, navigates from the login URL, and shows API jobs', async () => {

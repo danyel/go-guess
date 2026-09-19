@@ -115,7 +115,14 @@ export const api = {
       }),
     detachQuestion: (jobId: number, questionId: number) =>
       request<void>(`/jobs/${jobId}/questions/${questionId}`, { method: 'DELETE' }),
-    candidates: (jobId: number) => request<CandidateMatch[]>(`/jobs/${jobId}/candidates`),
+    candidates: async (jobId: number) => {
+      const matches = await request<CandidateMatch[]>(`/jobs/${jobId}/candidates`)
+      return matches.map((match) => ({
+        ...match,
+        matchedTraits: match.matchedTraits ?? [],
+        missingTraits: match.missingTraits ?? [],
+      }))
+    },
     invitations: (jobId: number) => request<Invitation[]>(`/jobs/${jobId}/invitations`),
     invitation: (jobId: number, invitationId: number) =>
       request<Interview>(`/jobs/${jobId}/invitations/${invitationId}`),

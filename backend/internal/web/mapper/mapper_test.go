@@ -19,3 +19,10 @@ func TestInterviewOmitsReferenceAnswer(t *testing.T) {
 		t.Fatalf("expected participant-safe code question, got %#v", response)
 	}
 }
+
+func TestCandidateAlwaysUsesJSONArrays(t *testing.T) {
+	response := CandidateToWeb(servicemodel.CandidateMatch{})
+	if response.Matched == nil || response.Missing == nil {
+		t.Fatalf("candidate trait collections must not be nil: %#v", response)
+	}
+}
