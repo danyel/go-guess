@@ -5,97 +5,72 @@
 Run repository-wide commands from the root:
 
 ```bash
-make dev                 # build and run PostgreSQL, API, and frontend
-make db-up               # start only PostgreSQL
-make migrate             # apply Goose migrations
-make migrate-down        # roll back one migration
-make test                # backend and frontend unit/component tests
-make test-integration    # PostgreSQL-backed repository tests; database must be running
+make dev                 # run PostgreSQL, API, and frontend with development fixtures
+make test                # complete suite, including disposable PostgreSQL integration tests
+make test-integration    # Go tests; starts its own PostgreSQL Testcontainer
+make test-env            # isolated seeded UI stack at http://localhost:15173
+make test-env-down       # remove the test stack and its PostgreSQL volume
 make lint                # go vet and ESLint
 make build               # compile the API and production frontend
 ```
 
-Run focused tests from the owning application:
+Focused tests:
 
 ```bash
 cd backend && go test ./internal/service -run '^TestCandidatesRequireSixtyPercent$'
+cd backend && go test -tags=integration ./internal/integration -run '^TestCompleteInterviewWorkflow$'
 cd frontend && npm test -- src/App.test.tsx -t "filters jobs by title"
 ```
 
-The required toolchain is Go 1.27.1 and React 19.3 with TypeScript/Vite. Frontend
-formatting can be checked with `cd frontend && npm run format:check`; backend files
-are formatted with `gofmt`.
+The required toolchain is Go 1.27.1 and React 19.3 with TypeScript/Vite. Use
+`cd frontend && npm run format:check` for frontend formatting and `gofmt` for Go.
 
 ## Architecture
 
-The repository has two applications:
+- `backend/cmd/api` wires configuration, PostgreSQL, security, services, handlers,
+  and the Chi router. Requests flow through `internal/web/{router,handler,model,mapper}`
+  to `internal/service/{model,services}` and then
+  `internal/database/{repository,mapper,entity}`. Never expose GORM entities from
+  handlers.
+- `backend/cmd/seed` applies embedded environment-aware fixtures.
+- `frontend/src/App.tsx` owns routing/layout/screens, `src/api.ts` is the typed HTTP
+  boundary, and `src/types.ts` contains client domain types. Vite proxies `/api` to
+  the Go service in development.
 
-- `backend/` is a Go HTTP API. `cmd/api` wires configuration, PostgreSQL, security,
-  services, handlers, and routing. Requests flow through
-  `internal/web/{router,handler,model,mapper}` to
-  `internal/service/{model,services}` and then
-  `internal/database/{repository,mapper,entity}`. Do not bypass these mapping
-  boundaries by exposing GORM entities from handlers.
-- `frontend/` is a React SPA. `src/App.tsx` owns routing/layout/screens,
-  `src/api.ts` is the typed HTTP boundary, and `src/types.ts` contains client domain
-  types. Vite proxies `/api` to the Go service in development.
+Goose files in `backend/migrations` are schema-only and run in every environment.
+`internal/database/seed/common.sql` contains shared reference data;
+`development.sql` and `test.sql` contain idempotent environment-specific fixtures.
+Every entity change requires a migration plus corresponding fixture and integration
+test updates. Never put demo users or test records in schema migrations.
 
-Goose SQL files in `backend/migrations/` are the database schema source of truth.
-The initial migration also supplies representative jobs, questions, participants,
-traits, and the local interviewer account.
+Authentication uses bcrypt passwords and HMAC-signed bearer JWTs. Domain routes are
+protected except `/api/health`, `/api/auth/login`, and opaque-token participant
+interview routes. Never expose password hashes, CV/photo bytes, or interviewer
+reference answers in public JSON.
 
-Authentication is custom bearer-token authentication: passwords are bcrypt hashes,
-`POST /api/auth/login` issues an HMAC-signed JWT, and all domain routes require that
-token. Never return password hashes or participant photo/CV bytes in JSON; those
-files have dedicated endpoints.
+Questions are permanent reusable records linked to jobs through
+`job_posting_questions`; detach links rather than deleting questions. Deprecated
+questions remain searchable but cannot be newly attached. Question values are
+`open`, `multiple_choice`, `radio`, and `code_review`. Choice types require at least
+two options. Open/code-review types require `referenceAnswer`; code review also
+requires `codeSnippet`.
 
-CV ingestion stores the original bytes and extracts text from plain text, PDF, or
-DOCX input. Trait extraction only considers normalized traits already present in
-the database. Candidate matching compares a participant's extracted traits with a
-job's labels, required skills, and additional skills; include matches only at the
-`service.CandidateThreshold` of 60% or higher.
-
-Questions are permanent, reusable library records and jobs own many-to-many links
-to them. Detaching removes only the link. The lifecycle is
-`draft -> published -> deprecated`; publishing requires at least one question, and
-only published jobs can create invitations. Once an invitation exists, its question
-set cannot be changed, and its duration is snapshotted so later job edits do not
-alter an active interview.
-
-Invitation URLs expose an opaque UUID token as `/participant/:invitationId` and use
-public `/api/interviews/{token}` API routes; they do not use interviewer JWT
-authentication. An invitation progresses from
-`pending` to `accepted` to `completed`. Answers may only be saved while accepted
-and before the snapshotted timer expires. The participant UI must gate questions
-behind explicit acceptance and provide First, Previous, Next, Last, and Submit
-controls. Interviewer review uses the protected
-`GET /api/jobs/{id}/invitations/{invitationId}` endpoint, which intentionally
-includes reference answers; the public interview endpoint does not.
+Jobs move through `draft`, `published`, and `deprecated`. Publishing requires a
+question, only published jobs can create invitations, and candidate matching uses
+labels plus both skill groups with a 60% threshold. Invitation URLs use
+`/participant/:invitationId`, where the identifier is an opaque token. Participant
+questions are acceptance-gated and answers are saved before final submission;
+interviewer review uses
+`GET /api/jobs/{id}/invitations/{invitationId}`.
 
 ## Repository conventions
 
-- Every Go interface name starts with `I` (`IStore`, `IJobService`,
-  `IParticipantService`, `ITokenManager`).
-- Keep transport, service, and persistence structs separate. Conversion belongs in
-  the adjacent `mapper` package, not in handlers or GORM entities.
-- Question types are the exact API values `open`, `multiple_choice`, `radio`, and
-  `code_review`. Multiple-choice and radio questions require at least two options.
-- Never delete question records through job operations. Use
-  `job_posting_questions` to attach/detach, and use the `deprecated` flag to retire
-  library questions. Full question edits use `PUT /api/questions/{id}`; deprecation
-  remains a separate `PATCH`.
-- The question create/edit form builds multiple-choice and radio options one at a
-  time. Keep option editing state separate from the saved options array and require
-  at least two options for those types. Open and code-review questions instead
-  require a `referenceAnswer` textarea. Never include that interviewer-only answer
-  in public interview responses.
-- Code-review questions also require `codeSnippet`. It is safe to include in the
-  participant payload and is rendered as a line-numbered pull-request review panel;
-  the participant's review comment remains the ordinary persisted answer.
-- Traits are de-duplicated case-insensitively through their normalized database
-  value. Labels and both skill groups all reuse the same `traits` table.
-- Participant creation is multipart form data using `firstName`, `lastName`,
-  `birthday`, `email`, `contactInfo`, `photo`, and `cv`.
-- Return explicit errors. Handlers convert expected validation/not-found/authentication
-  failures to HTTP responses and log unexpected failures rather than silently
-  falling back to demo data.
+- Prefix every Go interface name with `I`.
+- Keep web, service, and persistence models separate and convert them in adjacent
+  `mapper` packages.
+- Participant creation uses multipart fields `firstName`, `lastName`, `birthday`,
+  `email`, `contactInfo`, `photo`, and `cv`.
+- Return explicit errors; map expected failures to HTTP status codes and log
+  unexpected failures instead of silently falling back.
+- Commit every repository change with a meaningful conventional prefix such as
+  `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, or `chore:`.

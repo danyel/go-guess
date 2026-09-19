@@ -29,6 +29,7 @@ To run the applications outside containers:
 ```bash
 make db-up
 make migrate
+make seed
 make backend
 make frontend
 ```
@@ -39,8 +40,8 @@ outside local development.
 ## Quality commands
 
 ```bash
-make test
-make test-integration
+make test                 # full suite, including disposable PostgreSQL integration tests
+make test-integration     # Go integration suite with its own PostgreSQL container
 make lint
 make build
 ```
@@ -55,6 +56,19 @@ Run one frontend test:
 
 ```bash
 cd frontend && npm test -- src/App.test.tsx -t "filters jobs by title"
+```
+
+Docker must be available for `make test`. The integration suite starts PostgreSQL
+18 in a disposable Testcontainer, applies every Goose migration, loads deterministic
+test fixtures, exercises login and the complete interview workflow, and removes the
+container afterward.
+
+Start an isolated application stack populated with test data for manual UI testing:
+
+```bash
+make test-env
+# Open http://localhost:15173 and use integration@example.com / integration-password
+make test-env-down
 ```
 
 ## Architecture
@@ -72,9 +86,12 @@ submission without requiring an interviewer login. Interviewers can review every
 saved answer from the job's invitation list. Vite proxies `/api` to the Go service
 during local development.
 
-Goose migrations in `backend/migrations` are the schema source of truth and include
-representative local data. Uploaded CVs are stored as bytes; plain text, PDF, and
-DOCX content is inspected for normalized traits already defined by job postings.
+Goose migrations in `backend/migrations` are schema-only and run in every
+environment. Embedded SQL under `backend/internal/database/seed` separates shared
+reference traits from idempotent development and test fixtures. Docker Compose
+loads development fixtures by default; production loads only shared data. Uploaded
+CVs are stored as bytes; plain text, PDF, and DOCX content is inspected for
+normalized traits already defined by job postings.
 
 Jobs move through `draft`, `published`, and `deprecated` states. Questions are
 editable, permanent library records: jobs attach and detach links rather than
