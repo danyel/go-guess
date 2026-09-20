@@ -4,8 +4,12 @@ DATABASE_URL ?= postgres://go_guess:go_guess@localhost:5432/go_guess?sslmode=dis
 JWT_SECRET ?= local-development-secret-change-me-12345
 GOOSE := cd backend && go run github.com/pressly/goose/v3/cmd/goose@v3.26.0
 BDD_COMPOSE := docker compose -f docker-compose.bdd.yml
+HELM ?= helm
+HELM_CHART := deploy/helm/go-guess
+HELM_RELEASE ?= go-guess
+HELM_NAMESPACE ?= go-guess
 
-.PHONY: help dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-bdd test-bdd-down test-env test-env-down lint build
+.PHONY: help dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-bdd test-bdd-down test-env test-env-down lint build helm-lint helm-deploy-development helm-deploy-production
 
 help:
 	@echo "make dev        				builds the demo docker image"
@@ -27,6 +31,9 @@ help:
 	@echo "make test-env-down      		stops the test image"
 	@echo "make lint      				runs lint on the frontend"
 	@echo "make build      				builds the entire project"
+	@echo "make helm-lint				lints development and production Helm configurations"
+	@echo "make helm-deploy-development	deploys the development Helm release"
+	@echo "make helm-deploy-production	deploys the production Helm release"
 dev:
 	docker compose up --build
 
@@ -89,3 +96,21 @@ lint:
 build:
 	cd backend && go build ./...
 	cd frontend && npm run build
+
+helm-lint:
+	$(HELM) lint $(HELM_CHART) -f $(HELM_CHART)/values-development.yaml
+	$(HELM) lint $(HELM_CHART) -f $(HELM_CHART)/values-production.yaml
+	$(HELM) template $(HELM_RELEASE) $(HELM_CHART) \
+		-f $(HELM_CHART)/values-development.yaml >/dev/null
+	$(HELM) template $(HELM_RELEASE) $(HELM_CHART) \
+		-f $(HELM_CHART)/values-production.yaml >/dev/null
+
+helm-deploy-development:
+	$(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
+		--namespace $(HELM_NAMESPACE)-development --create-namespace \
+		-f $(HELM_CHART)/values-development.yaml
+
+helm-deploy-production:
+	$(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
+		--namespace $(HELM_NAMESPACE)-production --create-namespace \
+		-f $(HELM_CHART)/values-production.yaml

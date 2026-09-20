@@ -1,0 +1,44 @@
+image:
+  tag: latest
+  pullPolicy: Always
+
+app:
+  environment: development
+  frontendURL: http://localhost:30080
+
+service:
+  type: NodePort
+  nodePort: 30080
+
+ingress:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 96Mi
+  limits:
+    cpu: 300m
+    memory: 384Mi
+
+postgresql:
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 300m
+      memory: 384Mi
+
+rabbitmq:
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 300m
+      memory: 384Mi

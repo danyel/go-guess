@@ -11,6 +11,8 @@ shutdown() {
 goose -dir /app/migrations postgres "$DATABASE_URL" up
 seed
 
+mkdir -p /tmp/nginx
+
 api &
 api_pid=$!
 nginx -e /dev/stderr -g 'daemon off;' &

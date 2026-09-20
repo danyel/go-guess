@@ -112,6 +112,58 @@ Pushes to `master` publish `go-guess:latest` and `go-guess:<commit-sha>` to the
 private registry configured in `.github/workflows/publish-image.yml`. The
 repository must provide `REGISTRY_USERNAME` and `REGISTRY_PASSWORD` secrets.
 
+## Rancher and Helm
+
+The chart under `deploy/helm/go-guess` deploys the application, PostgreSQL, and
+RabbitMQ. It works with any Kubernetes cluster managed by Rancher; Rancher's free
+edition does not restrict Helm or GitHub Actions deployments.
+
+Validate or deploy one of the environment profiles:
+
+```bash
+make helm-lint
+make helm-deploy-development
+make helm-deploy-production
+```
+
+Development uses demo fixtures, ephemeral database and message-broker storage,
+and NodePort `30080`. Production uses production fixtures, persistent volumes,
+an Nginx ingress, generated secrets that are preserved across upgrades, and
+larger resource limits. Before production deployment, replace
+`go-guess.example.com` in `values-production.yaml` or override
+`app.frontendURL` and `ingress.hosts[0].host`. Configure a TLS entry under
+`ingress.tls` when the Rancher cluster does not provide TLS separately.
+
+To use external managed services, disable the bundled StatefulSets and provide
+full connection URLs:
+
+```bash
+helm upgrade --install go-guess deploy/helm/go-guess \
+  --namespace go-guess-production --create-namespace \
+  -f deploy/helm/go-guess/values-production.yaml \
+  --set postgresql.enabled=false \
+  --set rabbitmq.enabled=false \
+  --set-string secrets.databaseURL="$DATABASE_URL" \
+  --set-string secrets.rabbitmqURL="$RABBITMQ_URL"
+```
+
+`.github/workflows/deploy-rancher.yml` supports manual development or production
+deployment. It also deploys production automatically after the image publishing
+workflow succeeds. Create GitHub environments named `development` and
+`production`, then configure:
+
+- Secret `RANCHER_KUBE_CONFIG_BASE64`: base64-encoded kubeconfig downloaded from
+  Rancher.
+- Secrets `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`, and
+  `GO_GUESS_JWT_SECRET`.
+- Variable `RANCHER_NAMESPACE` for the target namespace.
+- Production variable `GO_GUESS_HOST`, plus optional
+  `GO_GUESS_FRONTEND_URL` and `GO_GUESS_TLS_SECRET`.
+
+Because the configured image registry uses HTTP, every Rancher cluster node must
+trust `batty1039.startdedicated.net:5000` as an insecure registry. Use HTTPS for
+the registry in production when possible.
+
 ## Architecture
 
 Requests enter the Chi router and web handlers under `backend/internal/web`.

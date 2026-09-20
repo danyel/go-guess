@@ -1,0 +1,153 @@
+name: Deploy to Rancher
+
+on:
+  workflow_run:
+    workflows:
+      - Publish Docker image
+    types:
+      - completed
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        required: true
+        default: development
+        type: choice
+        options:
+          - development
+          - production
+      image_tag:
+        description: Image tag (defaults to latest)
+        required: false
+        default: latest
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-guess-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    name: Deploy ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+    env:
+      TARGET_ENVIRONMENT: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'production' }}
+      KUBE_CONFIG_BASE64: ${{ secrets.RANCHER_KUBE_CONFIG_BASE64 }}
+      REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      JWT_SECRET: ${{ secrets.GO_GUESS_JWT_SECRET }}
+      GO_GUESS_HOST: ${{ vars.GO_GUESS_HOST }}
+      GO_GUESS_FRONTEND_URL: ${{ vars.GO_GUESS_FRONTEND_URL }}
+      GO_GUESS_TLS_SECRET: ${{ vars.GO_GUESS_TLS_SECRET }}
+      RANCHER_NAMESPACE: ${{ vars.RANCHER_NAMESPACE }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.18.6
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.34.1
+
+      - name: Resolve deployment settings
+        env:
+          REQUESTED_TAG: ${{ inputs.image_tag }}
+          PUBLISHED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -eu
+          if [ -z "$KUBE_CONFIG_BASE64" ]; then
+            echo "RANCHER_KUBE_CONFIG_BASE64 is required" >&2
+            exit 1
+          fi
+          if [ -z "$REGISTRY_USERNAME" ] || [ -z "$REGISTRY_PASSWORD" ]; then
+            echo "REGISTRY_USERNAME and REGISTRY_PASSWORD are required" >&2
+            exit 1
+          fi
+          if [ -z "$JWT_SECRET" ] || [ "${#JWT_SECRET}" -lt 32 ]; then
+            echo "GO_GUESS_JWT_SECRET must contain at least 32 characters" >&2
+            exit 1
+          fi
+          if [ "$TARGET_ENVIRONMENT" = "production" ] && [ -z "$GO_GUESS_HOST" ]; then
+            echo "GO_GUESS_HOST is required for production" >&2
+            exit 1
+          fi
+          namespace="${RANCHER_NAMESPACE:-go-guess-$TARGET_ENVIRONMENT}"
+          if [ -n "$PUBLISHED_SHA" ]; then
+            image_tag="$PUBLISHED_SHA"
+          else
+            image_tag="${REQUESTED_TAG:-latest}"
+          fi
+          frontend_url="$GO_GUESS_FRONTEND_URL"
+          if [ "$TARGET_ENVIRONMENT" = "production" ] && [ -z "$frontend_url" ]; then
+            frontend_url="https://$GO_GUESS_HOST"
+          fi
+          {
+            echo "DEPLOY_NAMESPACE=$namespace"
+            echo "IMAGE_TAG=$image_tag"
+            echo "RESOLVED_FRONTEND_URL=$frontend_url"
+          } >> "$GITHUB_ENV"
+
+      - name: Configure Rancher cluster access
+        run: |
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$KUBE_CONFIG_BASE64" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+          kubectl cluster-info
+
+      - name: Configure registry credentials
+        run: |
+          kubectl create namespace "$DEPLOY_NAMESPACE" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          kubectl -n "$DEPLOY_NAMESPACE" create secret docker-registry go-guess-registry \
+            --docker-server=batty1039.startdedicated.net:5000 \
+            --docker-username="$REGISTRY_USERNAME" \
+            --docker-password="$REGISTRY_PASSWORD" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy Helm release
+        run: |
+          set -eu
+          values_file="deploy/helm/go-guess/values-$TARGET_ENVIRONMENT.yaml"
+          set -- \
+            --set-string "image.tag=$IMAGE_TAG" \
+            --set "imagePullSecrets[0].name=go-guess-registry" \
+            --set-string "secrets.jwtSecret=$JWT_SECRET"
+          if [ -n "$RESOLVED_FRONTEND_URL" ]; then
+            set -- "$@" --set-string "app.frontendURL=$RESOLVED_FRONTEND_URL"
+          fi
+          if [ "$TARGET_ENVIRONMENT" = "production" ]; then
+            set -- "$@" --set-string "ingress.hosts[0].host=$GO_GUESS_HOST"
+            if [ -n "$GO_GUESS_TLS_SECRET" ]; then
+              set -- "$@" \
+                --set-string "ingress.tls[0].secretName=$GO_GUESS_TLS_SECRET" \
+                --set-string "ingress.tls[0].hosts[0]=$GO_GUESS_HOST"
+            fi
+          fi
+          helm upgrade --install go-guess deploy/helm/go-guess \
+            --namespace "$DEPLOY_NAMESPACE" \
+            --values "$values_file" \
+            --atomic \
+            --wait \
+            --timeout 10m \
+            "$@"
+
+      - name: Verify deployment
+        run: |
+          kubectl -n "$DEPLOY_NAMESPACE" rollout status deployment/go-guess \
+            --timeout=5m
+          helm test go-guess --namespace "$DEPLOY_NAMESPACE" --logs

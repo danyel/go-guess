@@ -1,0 +1,41 @@
+image:
+  tag: latest
+  pullPolicy: IfNotPresent
+
+app:
+  environment: production
+  frontendURL: https://go-guess.example.com
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 10m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+  hosts:
+    - host: go-guess.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 768Mi
+
+postgresql:
+  persistence:
+    enabled: true
+    size: 20Gi
+
+rabbitmq:
+  persistence:
+    enabled: true
+    size: 8Gi

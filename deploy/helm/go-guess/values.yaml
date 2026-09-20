@@ -1,0 +1,112 @@
+nameOverride: ""
+fullnameOverride: ""
+
+replicaCount: 1
+
+image:
+  repository: batty1039.startdedicated.net:5000/go-guess
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+app:
+  environment: production
+  frontendURL: http://localhost:8080
+  tokenTTL: 8h
+  maxUploadMB: 10
+
+secrets:
+  jwtSecret: ""
+  databaseURL: ""
+  rabbitmqURL: ""
+  postgresqlPassword: ""
+  rabbitmqPassword: ""
+
+service:
+  type: ClusterIP
+  port: 80
+  nodePort: null
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: go-guess.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+podAnnotations: {}
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 10001
+  fsGroupChangePolicy: OnRootMismatch
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 10001
+
+strategy:
+  type: Recreate
+
+postgresql:
+  enabled: true
+  image:
+    repository: postgres
+    tag: 18-alpine
+    pullPolicy: IfNotPresent
+  auth:
+    username: go_guess
+    database: go_guess
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+rabbitmq:
+  enabled: true
+  image:
+    repository: rabbitmq
+    tag: 4-alpine
+    pullPolicy: IfNotPresent
+  auth:
+    username: go_guess
+  persistence:
+    enabled: true
+    size: 4Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
