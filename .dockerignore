@@ -1,0 +1,15 @@
+.git
+.github
+.idea
+.vscode
+.env
+.env.*
+*.md
+
+**/node_modules
+frontend/dist
+frontend/coverage
+**/*.tsbuildinfo
+
+backend/bin
+backend/coverage.out

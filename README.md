@@ -73,6 +73,31 @@ make test-env
 make test-env-down
 ```
 
+## Production image
+
+Build the complete application as a single image:
+
+```bash
+docker build -t go-guess .
+```
+
+The image serves the frontend and API on port `8080`. It applies database
+migrations and shared production fixtures before startup. PostgreSQL, RabbitMQ,
+and these environment variables must be provided:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e DATABASE_URL='postgres://user:password@postgres:5432/go_guess?sslmode=disable' \
+  -e RABBITMQ_URL='amqp://user:password@rabbitmq:5672/' \
+  -e JWT_SECRET='replace-with-at-least-32-characters' \
+  -e FRONTEND_URL='https://go-guess.example.com' \
+  go-guess
+```
+
+Pushes to `master` publish `go-guess:latest` and `go-guess:<commit-sha>` to the
+private registry configured in `.github/workflows/publish-image.yml`. The
+repository must provide `REGISTRY_USERNAME` and `REGISTRY_PASSWORD` secrets.
+
 ## Architecture
 
 Requests enter the Chi router and web handlers under `backend/internal/web`.
