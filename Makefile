@@ -6,6 +6,24 @@ GOOSE := cd backend && go run github.com/pressly/goose/v3/cmd/goose@v3.26.0
 
 .PHONY: dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-env test-env-down lint build
 
+help:
+	@echo "make dev        				builds the demo docker image"
+	@echo "make db-up    				starts the database docker container"
+	@echo "make db-down    				stops the database docker container"
+	@echo "make migrate       			runs the sql scripts migration"
+	@echo "make migrate-down 			revert the sql scripts migration"
+	@echo "make seed        			seeds data into the database"
+	@echo "make backend       			runs the backend"
+	@echo "make frontend      			runs the frontend"
+	@echo "make frontend-install     	installs the dependencies for the frontend"
+	@echo "make test 					full test suite: test-backend test-frontend and test-integration"
+	@echo "make test-backend			runs the tests for the backend"
+	@echo "make test-frontend			runs the tests for the fronted"
+	@echo "make test-integration		runs the integration tests"
+	@echo "make test-env			    builds the docker tests image"
+	@echo "make test-env-down      		stops the test image"
+	@echo "make lint      				runs lint on the frontend"
+	@echo "make build      				builds the entire project"
 dev:
 	docker compose up --build
 
