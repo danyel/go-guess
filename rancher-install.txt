@@ -1,0 +1,155 @@
+# Rancher single-server installation
+
+This runbook reproduces the local Rancher management instance installed on the
+dedicated server. It binds Rancher only to loopback; Nginx and Certbot provide
+public access separately.
+
+This Docker-based Rancher installation is appropriate for a single-server,
+non-HA environment. A production environment that requires control-plane high
+availability should run Rancher with its Helm chart on a dedicated multi-node
+Kubernetes cluster instead of copying this single-container topology.
+
+## Installed versions and paths
+
+- Rancher: `v2.15.1`
+- Image:
+  `rancher/rancher@sha256:5f6c4dc52a05e0c400b53c08bf778ca55790f277e443b5881269158499b7ebe5`
+- Persistent data: `/opt/rancher`
+- Registry configuration: `~/.config/kubectl/registries.yaml`
+- Local HTTP: `http://127.0.0.1:8000`
+- Local HTTPS: `https://127.0.0.1:8443`
+
+Pinning the digest makes another installation reproducible. Review and update
+the Rancher version deliberately rather than running an unpinned `latest` image
+in production.
+
+## 1. Configure the HTTP image registry
+
+The source file is committed at `deploy/rancher/registries.yaml`. Install it:
+
+```bash
+install -Dm0644 deploy/rancher/registries.yaml \
+  "$HOME/.config/kubectl/registries.yaml"
+```
+
+Its content is:
+
+```yaml
+mirrors:
+  "batty1039.startdedicated.net:5000":
+    endpoint:
+      - "http://batty1039.startdedicated.net:5000"
+
+configs:
+  "batty1039.startdedicated.net:5000":
+    tls:
+      insecure_skip_verify: true
+```
+
+The original draft contained duplicate YAML keys. Duplicate keys are invalid
+for this purpose because parsers may silently discard one occurrence.
+
+## 2. Prepare persistent storage
+
+```bash
+sudo install -d -m 0755 /opt/rancher
+```
+
+Back up this directory before Rancher upgrades. It contains the embedded K3s
+management cluster and all Rancher state.
+
+## 3. Pull and run Rancher
+
+```bash
+docker pull \
+  rancher/rancher@sha256:5f6c4dc52a05e0c400b53c08bf778ca55790f277e443b5881269158499b7ebe5
+
+docker run -d \
+  --restart=unless-stopped \
+  -p 127.0.0.1:8000:80 \
+  -p 127.0.0.1:8443:443 \
+  -v /opt/rancher:/var/lib/rancher \
+  -v "$HOME/.config/kubectl/registries.yaml:/etc/rancher/k3s/registries.yaml:ro" \
+  --privileged \
+  --name rancher \
+  rancher/rancher@sha256:5f6c4dc52a05e0c400b53c08bf778ca55790f277e443b5881269158499b7ebe5
+```
+
+The explicit `127.0.0.1` bindings prevent ports `8000` and `8443` from being
+published directly to the internet. Nginx on the same server can still reach
+them.
+
+## 4. Verify the installation
+
+Wait until the readiness endpoint returns `pong`:
+
+```bash
+until curl -ksSf https://127.0.0.1:8443/ping | grep -q pong; do
+  sleep 5
+done
+
+docker ps --filter name='^/rancher$'
+docker exec rancher kubectl get nodes -o wide
+```
+
+Expected results:
+
+- The container is running with restart policy `unless-stopped`.
+- Only `127.0.0.1:8000` and `127.0.0.1:8443` are published.
+- `https://127.0.0.1:8443/ping` returns `pong`.
+- The embedded `local-node` reports `Ready`.
+
+Retrieve the one-time bootstrap password locally, open
+`https://127.0.0.1:8443`, and immediately choose a permanent administrator
+password:
+
+```bash
+docker logs rancher 2>&1 |
+  sed -n 's/.*Bootstrap Password: //p' |
+  tail -n 1
+```
+
+Do not save that password in this repository.
+
+## 5. Add Nginx and Certbot separately
+
+For a public Rancher hostname, configure one.com DNS to point at the dedicated
+server. Proxy Nginx to `https://127.0.0.1:8443`, enable WebSocket upgrade
+headers, and disable upstream certificate verification because Rancher's local
+certificate is self-signed. Then request the public certificate:
+
+```bash
+sudo certbot --nginx -d rancher.urpi.be
+sudo certbot renew --dry-run
+```
+
+Expose only public TCP ports `80` and `443`. Keep `8000` and `8443` bound to
+loopback as configured above.
+
+## Operations
+
+Inspect status and logs:
+
+```bash
+docker ps --filter name='^/rancher$'
+docker logs --tail 200 rancher
+```
+
+Restart Rancher:
+
+```bash
+docker restart rancher
+```
+
+Create a consistent backup:
+
+```bash
+docker stop rancher
+sudo tar -C /opt -czf "rancher-backup-$(date +%Y%m%d-%H%M%S).tar.gz" rancher
+docker start rancher
+```
+
+Before an upgrade, read the Rancher release notes and compatibility matrix,
+back up `/opt/rancher`, pull a specifically pinned replacement image, remove
+only the stopped `rancher` container, and recreate it with the same mounts and
+port bindings.

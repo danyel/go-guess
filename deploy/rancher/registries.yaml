@@ -1,0 +1,9 @@
+mirrors:
+  "batty1039.startdedicated.net:5000":
+    endpoint:
+      - "http://batty1039.startdedicated.net:5000"
+
+configs:
+  "batty1039.startdedicated.net:5000":
+    tls:
+      insecure_skip_verify: true
