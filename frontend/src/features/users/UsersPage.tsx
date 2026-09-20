@@ -50,8 +50,6 @@ export function UsersPage() {
       <header className="page-header">
         <div>
           <span className="eyebrow">Team access</span>
-          <h1>Users</h1>
-          <p>Create co-interviewers and manage the people who collaborate on interviews.</p>
         </div>
       </header>
       {error && <ErrorAlert error={error} />}

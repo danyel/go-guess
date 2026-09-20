@@ -10,8 +10,6 @@ export function ProfilePage() {
       <header className="page-header">
         <div>
           <span className="eyebrow">Your account</span>
-          <h1>{user.displayName}</h1>
-          <p>Your signed-in identity and workspace access.</p>
         </div>
       </header>
       <section className="card profile-card">
@@ -20,7 +18,7 @@ export function ProfilePage() {
             {user.displayName.slice(0, 2).toUpperCase()}
           </span>
           <div>
-            <h2>{user.displayName}</h2>
+            <h1>{user.displayName}</h1>
             <span className={`status status-${user.role}`}>{user.role}</span>
           </div>
         </div>
