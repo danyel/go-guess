@@ -15,13 +15,13 @@ export const footerLinkGroups: FooterLinkGroup[] = [
       { label: 'Jobs', href: '/jobs' },
       { label: 'Participants', href: '/participants' },
       { label: 'Question library', href: '/questions' },
-      { label: 'Calendar', href: '/calendar' },
     ],
   },
   {
     title: 'Useful links',
     links: [
       { label: 'Your inbox', href: '/inbox' },
+      { label: 'Calendar', href: '/calendar' },
       { label: 'Your profile', href: '/profile' },
       { label: 'Interview team', href: '/users' },
     ],

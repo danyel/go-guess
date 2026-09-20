@@ -5,7 +5,7 @@ import { AppFooter } from '../components/layout/AppFooter'
 import { GoGuessHeader } from '../components/layout/GoGuessHeader'
 import { WorkspaceUtilities } from '../components/layout/WorkspaceUtilities'
 import { NotFound } from '../components/ui/NotFound'
-import { CalendarPage, InboxPage, ScheduledInterviewPage } from '../features/interviews'
+import { InboxPage, ScheduledInterviewPage } from '../features/interviews'
 import { CreateJobPage, JobDetailPage, JobsPage } from '../features/jobs'
 import {
   CreateParticipantPage,
@@ -13,7 +13,7 @@ import {
   ParticipantsPage,
 } from '../features/participants'
 import { QuestionLibraryPage, QuestionPage } from '../features/questions'
-import { ProfilePage, UsersPage } from '../features/users'
+import {CalendarPage, ProfilePage, UsersPage} from '../features/users'
 
 export function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
   const [open, setOpen] = useState(false)

@@ -43,7 +43,6 @@ export function SideBar({
           icon={<CircleHelp size={20} />}
           close={close}
         />
-        <NavItem to="/calendar" label="Calendar" icon={<CalendarDays size={20} />} close={close} />
         <NavItem to="/users" label="Users" icon={<UserRound size={20} />} close={close} />
       </nav>
       <div className="sidebar-bottom">

@@ -5,3 +5,9 @@ export function errorMessage(error: unknown) {
     ? error.message
     : 'Something went wrong'
 }
+
+export function message(error: unknown) {
+  return error instanceof ApiError || error instanceof Error
+      ? error.message
+      : 'Something went wrong'
+}
