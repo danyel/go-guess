@@ -1,0 +1,13 @@
+{
+  "name": "go-guess-bdd",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "cucumber-js --config cucumber.mjs"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "13.2.1",
+    "playwright": "1.63.0"
+  }
+}

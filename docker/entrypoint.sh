@@ -13,7 +13,7 @@ seed
 
 api &
 api_pid=$!
-nginx -g 'daemon off;' &
+nginx -e /dev/stderr -g 'daemon off;' &
 nginx_pid=$!
 
 trap shutdown TERM INT

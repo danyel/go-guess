@@ -4,3 +4,5 @@ backend/api
 frontend/node_modules/
 frontend/dist/
 frontend/coverage/
+bdd/node_modules/
+bdd/reports/

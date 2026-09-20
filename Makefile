@@ -3,8 +3,9 @@ SHELL := /bin/sh
 DATABASE_URL ?= postgres://go_guess:go_guess@localhost:5432/go_guess?sslmode=disable
 JWT_SECRET ?= local-development-secret-change-me-12345
 GOOSE := cd backend && go run github.com/pressly/goose/v3/cmd/goose@v3.26.0
+BDD_COMPOSE := docker compose -f docker-compose.bdd.yml
 
-.PHONY: dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-env test-env-down lint build
+.PHONY: help dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-bdd test-bdd-down test-env test-env-down lint build
 
 help:
 	@echo "make dev        				builds the demo docker image"
@@ -16,10 +17,12 @@ help:
 	@echo "make backend       			runs the backend"
 	@echo "make frontend      			runs the frontend"
 	@echo "make frontend-install     	installs the dependencies for the frontend"
-	@echo "make test 					full test suite: test-backend test-frontend and test-integration"
+	@echo "make test 					full test suite: frontend, integration, and browser BDD"
 	@echo "make test-backend			runs the tests for the backend"
 	@echo "make test-frontend			runs the tests for the fronted"
 	@echo "make test-integration		runs the integration tests"
+	@echo "make test-bdd				runs browser BDD stories against the production image"
+	@echo "make test-bdd-down			removes the isolated BDD stack and database"
 	@echo "make test-env			    builds the docker tests image"
 	@echo "make test-env-down      		stops the test image"
 	@echo "make lint      				runs lint on the frontend"
@@ -51,7 +54,7 @@ frontend:
 frontend-install:
 	cd frontend && npm ci
 
-test: frontend-install test-integration test-frontend
+test: frontend-install test-integration test-frontend test-bdd
 
 test-backend:
 	cd backend && go test ./...
@@ -61,6 +64,15 @@ test-frontend:
 
 test-integration:
 	cd backend && go test -tags=integration ./...
+
+test-bdd:
+	@set -eu; \
+	$(BDD_COMPOSE) down -v --remove-orphans; \
+	trap '$(BDD_COMPOSE) down -v --remove-orphans >/dev/null 2>&1' EXIT INT TERM; \
+	$(BDD_COMPOSE) up --build --abort-on-container-exit --exit-code-from bdd
+
+test-bdd-down:
+	$(BDD_COMPOSE) down -v --remove-orphans
 
 test-env:
 	COMPOSE_PROJECT_NAME=go-guess-test APP_ENV=test DB_PORT=15432 API_PORT=18080 \

@@ -59,6 +59,20 @@ Run one frontend test:
 cd frontend && npm test -- src/app/App.test.tsx -t "filters jobs by title"
 ```
 
+Run the browser-level BDD user stories against an isolated production image:
+
+```bash
+make test-bdd
+```
+
+The human-readable scenarios live in
+`bdd/features/recruitment-workspace.feature`. Add, remove, or edit scenarios in
+that single file; reusable Playwright-backed steps live under `bdd/steps`.
+Every run creates a fresh PostgreSQL database, loads deterministic test fixtures,
+starts the complete production container with RabbitMQ, and writes an HTML report
+to `bdd/reports/cucumber.html`. Use `make test-bdd-down` to remove a manually
+started BDD stack.
+
 Docker must be available for `make test`. The integration suite starts PostgreSQL
 18 and RabbitMQ 4 in disposable Testcontainers, applies every Goose migration,
 loads deterministic test fixtures, exercises login and the complete assessment and

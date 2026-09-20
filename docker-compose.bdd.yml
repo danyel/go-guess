@@ -1,0 +1,58 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: go_guess
+      POSTGRES_USER: go_guess
+      POSTGRES_PASSWORD: go_guess
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U go_guess -d go_guess"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  rabbitmq:
+    image: rabbitmq:4-alpine
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://go_guess:go_guess@db:5432/go_guess?sslmode=disable
+      JWT_SECRET: bdd-test-secret-that-is-at-least-32-characters
+      FRONTEND_URL: http://app:8080
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      APP_ENV: test
+    ports:
+      - "${BDD_WEB_PORT:-15174}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  bdd:
+    build:
+      context: bdd
+      dockerfile: Dockerfile
+    environment:
+      BDD_BASE_URL: http://127.0.0.1:8080
+      BDD_HEADLESS: "true"
+      BDD_STEP_TIMEOUT_MS: "15000"
+    network_mode: service:app
+    volumes:
+      - ./bdd/reports:/work/reports
+    depends_on:
+      app:
+        condition: service_healthy

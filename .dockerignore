@@ -9,6 +9,7 @@
 **/node_modules
 frontend/dist
 frontend/coverage
+bdd/reports
 **/*.tsbuildinfo
 
 backend/bin
