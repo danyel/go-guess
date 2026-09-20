@@ -43,9 +43,7 @@ jobs:
       REGISTRY_USERNAME: ${{ secrets.REGISTRY_USERNAME }}
       REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
       JWT_SECRET: ${{ secrets.GO_GUESS_JWT_SECRET }}
-      GO_GUESS_HOST: ${{ vars.GO_GUESS_HOST }}
       GO_GUESS_FRONTEND_URL: ${{ vars.GO_GUESS_FRONTEND_URL }}
-      GO_GUESS_TLS_SECRET: ${{ vars.GO_GUESS_TLS_SECRET }}
       RANCHER_NAMESPACE: ${{ vars.RANCHER_NAMESPACE }}
 
     steps:
@@ -82,10 +80,6 @@ jobs:
             echo "GO_GUESS_JWT_SECRET must contain at least 32 characters" >&2
             exit 1
           fi
-          if [ "$TARGET_ENVIRONMENT" = "production" ] && [ -z "$GO_GUESS_HOST" ]; then
-            echo "GO_GUESS_HOST is required for production" >&2
-            exit 1
-          fi
           namespace="${RANCHER_NAMESPACE:-go-guess-$TARGET_ENVIRONMENT}"
           if [ -n "$PUBLISHED_SHA" ]; then
             image_tag="$PUBLISHED_SHA"
@@ -94,7 +88,7 @@ jobs:
           fi
           frontend_url="$GO_GUESS_FRONTEND_URL"
           if [ "$TARGET_ENVIRONMENT" = "production" ] && [ -z "$frontend_url" ]; then
-            frontend_url="https://$GO_GUESS_HOST"
+            frontend_url="https://goguess.urpi.be"
           fi
           {
             echo "DEPLOY_NAMESPACE=$namespace"
@@ -129,14 +123,6 @@ jobs:
             --set-string "secrets.jwtSecret=$JWT_SECRET"
           if [ -n "$RESOLVED_FRONTEND_URL" ]; then
             set -- "$@" --set-string "app.frontendURL=$RESOLVED_FRONTEND_URL"
-          fi
-          if [ "$TARGET_ENVIRONMENT" = "production" ]; then
-            set -- "$@" --set-string "ingress.hosts[0].host=$GO_GUESS_HOST"
-            if [ -n "$GO_GUESS_TLS_SECRET" ]; then
-              set -- "$@" \
-                --set-string "ingress.tls[0].secretName=$GO_GUESS_TLS_SECRET" \
-                --set-string "ingress.tls[0].hosts[0]=$GO_GUESS_HOST"
-            fi
           fi
           helm upgrade --install go-guess deploy/helm/go-guess \
             --namespace "$DEPLOY_NAMESPACE" \

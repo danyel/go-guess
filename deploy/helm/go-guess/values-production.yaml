@@ -4,23 +4,14 @@ image:
 
 app:
   environment: production
-  frontendURL: https://go-guess.example.com
+  frontendURL: https://goguess.urpi.be
 
 service:
-  type: ClusterIP
+  type: NodePort
+  nodePort: 31374
 
 ingress:
-  enabled: true
-  className: nginx
-  annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: 10m
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
-  hosts:
-    - host: go-guess.example.com
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
+  enabled: false
 
 resources:
   requests:

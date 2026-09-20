@@ -3,7 +3,8 @@ Go Guess has been installed in namespace {{ .Release.Namespace }}.
 {{- if .Values.ingress.enabled }}
 Open {{ .Values.app.frontendURL }}
 {{- else if eq .Values.service.type "NodePort" }}
-Open a cluster node on port {{ .Values.service.nodePort }}.
+The application is exposed on cluster node port {{ .Values.service.nodePort }}.
+Open {{ .Values.app.frontendURL }} through the external reverse proxy.
 {{- else }}
 Run:
   kubectl -n {{ .Release.Namespace }} port-forward service/{{ include "go-guess.fullname" . }} 8080:{{ .Values.service.port }}

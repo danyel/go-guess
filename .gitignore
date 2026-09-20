@@ -6,3 +6,4 @@ frontend/dist/
 frontend/coverage/
 bdd/node_modules/
 bdd/reports/
+deploy/local.yaml

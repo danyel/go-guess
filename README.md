@@ -128,11 +128,11 @@ make helm-deploy-production
 
 Development uses demo fixtures, ephemeral database and message-broker storage,
 and NodePort `30080`. Production uses production fixtures, persistent volumes,
-an Nginx ingress, generated secrets that are preserved across upgrades, and
-larger resource limits. Before production deployment, replace
-`go-guess.example.com` in `values-production.yaml` or override
-`app.frontendURL` and `ingress.hosts[0].host`. Configure a TLS entry under
-`ingress.tls` when the Rancher cluster does not provide TLS separately.
+generated secrets that are preserved across upgrades, and larger resource
+limits. It exposes the application at NodePort `31374` for the dedicated-server
+Nginx proxy while PostgreSQL and RabbitMQ remain cluster-internal. The public
+URL is `https://goguess.urpi.be`; one.com DNS, Nginx, Certbot, firewall, and
+verification instructions are in `deploy/nginx/README.md`.
 
 To use external managed services, disable the bundled StatefulSets and provide
 full connection URLs:
@@ -157,8 +157,8 @@ workflow succeeds. Create GitHub environments named `development` and
 - Secrets `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`, and
   `GO_GUESS_JWT_SECRET`.
 - Variable `RANCHER_NAMESPACE` for the target namespace.
-- Production variable `GO_GUESS_HOST`, plus optional
-  `GO_GUESS_FRONTEND_URL` and `GO_GUESS_TLS_SECRET`.
+- Optional variable `GO_GUESS_FRONTEND_URL` when overriding an environment's
+  configured public URL.
 
 Because the configured image registry uses HTTP, every Rancher cluster node must
 trust `batty1039.startdedicated.net:5000` as an insecure registry. Use HTTPS for
