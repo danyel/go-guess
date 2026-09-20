@@ -18,6 +18,8 @@ Kubernetes cluster instead of copying this single-container topology.
 - Registry configuration: `~/.config/kubectl/registries.yaml`
 - Local HTTP: `http://127.0.0.1:8000`
 - Local HTTPS: `https://127.0.0.1:8443`
+- Development application NodePort: `http://127.0.0.1:30080`
+- Production application NodePort: `http://127.0.0.1:31374`
 
 Pinning the digest makes another installation reproducible. Review and update
 the Rancher version deliberately rather than running an unpinned `latest` image
@@ -68,6 +70,8 @@ docker run -d \
   --restart=unless-stopped \
   -p 127.0.0.1:8000:80 \
   -p 127.0.0.1:8443:443 \
+  -p 127.0.0.1:30080:30080 \
+  -p 127.0.0.1:31374:31374 \
   -v /opt/rancher:/var/lib/rancher \
   -v "$HOME/.config/kubectl/registries.yaml:/etc/rancher/k3s/registries.yaml:ro" \
   --privileged \
@@ -75,9 +79,10 @@ docker run -d \
   rancher/rancher@sha256:5f6c4dc52a05e0c400b53c08bf778ca55790f277e443b5881269158499b7ebe5
 ```
 
-The explicit `127.0.0.1` bindings prevent ports `8000` and `8443` from being
-published directly to the internet. Nginx on the same server can still reach
-them.
+The explicit `127.0.0.1` bindings prevent Rancher and application NodePorts
+from being published directly to the internet. Nginx on the same server can
+still reach them. Docker cannot add port mappings to an existing container, so
+new NodePorts must be included when recreating the Rancher container.
 
 ## 4. Verify the installation
 
@@ -95,9 +100,15 @@ docker exec rancher kubectl get nodes -o wide
 Expected results:
 
 - The container is running with restart policy `unless-stopped`.
-- Only `127.0.0.1:8000` and `127.0.0.1:8443` are published.
+- Only loopback ports `8000`, `8443`, `30080`, and `31374` are published.
 - `https://127.0.0.1:8443/ping` returns `pong`.
 - The embedded `local-node` reports `Ready`.
+
+After deploying Go Guess, verify the application NodePort:
+
+```bash
+curl --fail http://127.0.0.1:30080/api/health
+```
 
 Retrieve the one-time bootstrap password locally, open
 `https://127.0.0.1:8443`, and immediately choose a permanent administrator

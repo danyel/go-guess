@@ -8,6 +8,7 @@ HELM ?= helm
 HELM_CHART := deploy/helm/go-guess
 HELM_RELEASE ?= go-guess
 HELM_NAMESPACE ?= go-guess
+KUBECONFIG ?= $(HOME)/.config/kubectl/rancher.urpi.local.yaml
 
 .PHONY: help dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-bdd test-bdd-down test-env test-env-down lint build helm-lint helm-deploy-development helm-deploy-production
 
@@ -98,19 +99,21 @@ build:
 	cd frontend && npm run build
 
 helm-lint:
-	$(HELM) lint $(HELM_CHART) -f $(HELM_CHART)/values-development.yaml
-	$(HELM) lint $(HELM_CHART) -f $(HELM_CHART)/values-production.yaml
-	$(HELM) template $(HELM_RELEASE) $(HELM_CHART) \
+	KUBECONFIG="$(KUBECONFIG)" $(HELM) lint $(HELM_CHART) -f $(HELM_CHART)/values-development.yaml
+	KUBECONFIG="$(KUBECONFIG)" $(HELM) lint $(HELM_CHART) -f $(HELM_CHART)/values-production.yaml
+	KUBECONFIG="$(KUBECONFIG)" $(HELM) template $(HELM_RELEASE) $(HELM_CHART) \
 		-f $(HELM_CHART)/values-development.yaml >/dev/null
-	$(HELM) template $(HELM_RELEASE) $(HELM_CHART) \
+	KUBECONFIG="$(KUBECONFIG)" $(HELM) template $(HELM_RELEASE) $(HELM_CHART) \
 		-f $(HELM_CHART)/values-production.yaml >/dev/null
 
 helm-deploy-development:
-	$(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
+	KUBECONFIG="$(KUBECONFIG)" $(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
 		--namespace $(HELM_NAMESPACE)-development --create-namespace \
-		-f $(HELM_CHART)/values-development.yaml
+		-f $(HELM_CHART)/values-development.yaml \
+		--rollback-on-failure --wait --timeout 10m
 
 helm-deploy-production:
-	$(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
+	KUBECONFIG="$(KUBECONFIG)" $(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
 		--namespace $(HELM_NAMESPACE)-production --create-namespace \
-		-f $(HELM_CHART)/values-production.yaml
+		-f $(HELM_CHART)/values-production.yaml \
+		--rollback-on-failure --wait --timeout 10m
