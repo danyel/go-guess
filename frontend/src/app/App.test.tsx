@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter, MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -218,6 +218,37 @@ describe('Go Guess frontend', () => {
 
     await user.type(screen.getByRole('textbox', { name: /search jobs/i }), 'designer')
     expect(screen.queryByRole('link', { name: 'Senior Go Engineer' })).not.toBeInTheDocument()
+  })
+
+  it('moves account links to the top and renders the logged-in user profile and footer', async () => {
+    authenticate()
+    renderApp('/profile')
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Admin' })).toBeInTheDocument()
+    expect(screen.getByText('admin@example.com')).toBeInTheDocument()
+
+    const accountNavigation = screen.getByRole('navigation', { name: 'Account navigation' })
+    expect(within(accountNavigation).getByRole('link', { name: 'Inbox' })).toHaveAttribute(
+      'href',
+      '/inbox',
+    )
+    expect(within(accountNavigation).getByRole('link', { name: 'Admin' })).toHaveAttribute(
+      'href',
+      '/profile',
+    )
+
+    const primaryNavigation = screen.getByRole('navigation', { name: 'Primary navigation' })
+    expect(within(primaryNavigation).queryByRole('link', { name: 'Inbox' })).not.toBeInTheDocument()
+
+    const footerNavigation = screen.getByRole('navigation', { name: 'Footer navigation' })
+    expect(within(footerNavigation).getByRole('link', { name: 'Jobs' })).toHaveAttribute(
+      'href',
+      '/jobs',
+    )
+    expect(within(footerNavigation).getByRole('link', { name: 'Your profile' })).toHaveAttribute(
+      'href',
+      '/profile',
+    )
   })
 
   it('adds multiple choice options with the accessible plus button', async () => {

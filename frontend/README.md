@@ -26,6 +26,7 @@ npm test -- src/app/App.test.tsx -t "filters jobs by title"
 - `src/app` contains the application shell, providers, routes, and route-level tests.
 - `src/features` groups pages and components by business capability.
 - `src/components` contains UI shared by multiple features.
+- `src/config/navigation.ts` defines configurable footer sitemap and useful-link groups.
 - `src/api/client.ts` is the typed HTTP boundary.
 - `src/types` contains API and domain types.
 - `src/styles/global.css` contains shared tokens and layout styles.
@@ -97,12 +98,16 @@ form for the date, location, co-interviewers, and candidate-visible shared docum
 The authenticated workspace also includes:
 
 - **Users** for listing and creating co-interviewers.
-- **Inbox** for accepting or declining interview assignments.
+- **Inbox** in the top-right account navigation for accepting or declining assignments.
+- **Profile** in the top-right account navigation for the logged-in user's identity and role.
 - **Calendar** for interviews grouped by date.
 - **Interviewer sessions** for changing status, editing prominent shared documentation, and
   posting private notes while an interview is started. Notes and shared-document changes arrive
   live through an authenticated streaming `fetch`; the app intentionally does not use
   `EventSource`, because the request needs the JWT authorization header.
+
+The authenticated layout ends with a sitemap and useful-links footer. Update
+`src/config/navigation.ts` to add, remove, or reorder footer destinations.
 
 Participants open the generated `/participant/:invitationId` URL without signing in. The opaque
 invitation ID authorizes the existing `/api/interviews/:token` API. Code-review questions are shown

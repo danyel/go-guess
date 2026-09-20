@@ -16,7 +16,6 @@ import {
   Plus,
   Search,
   Send,
-  Inbox,
   Sparkles,
   Trash2,
   Upload,
@@ -52,6 +51,9 @@ import {
   ScheduledInterviewPage,
 } from '../features/interviews'
 import { UsersPage } from '../features/users'
+import { ProfilePage } from '../features/users'
+import { AppFooter } from '../components/layout/AppFooter'
+import { WorkspaceUtilities } from '../components/layout/WorkspaceUtilities'
 import type {
   CandidateMatch,
   CreateJobInput,
@@ -293,12 +295,6 @@ function AppLayout({ onLogout }: { onLogout: () => void }) {
             close={() => setOpen(false)}
           />
           <NavItem
-            to="/inbox"
-            label="Inbox"
-            icon={<Inbox size={20} />}
-            close={() => setOpen(false)}
-          />
-          <NavItem
             to="/calendar"
             label="Calendar"
             icon={<CalendarDays size={20} />}
@@ -312,35 +308,34 @@ function AppLayout({ onLogout }: { onLogout: () => void }) {
           />
         </nav>
         <div className="sidebar-bottom">
-          <div className="user-chip">
-            <span className="avatar tiny">{user?.email.slice(0, 2).toUpperCase() ?? 'U'}</span>
-            <span>
-              <strong>{user?.email ?? 'Signed in'}</strong>
-              <small>{user?.role ?? 'User'}</small>
-            </span>
-          </div>
-          <button className="icon-button" onClick={onLogout} aria-label="Sign out">
-            <LogOut size={19} />
+          <button className="sidebar-signout" onClick={onLogout}>
+            <LogOut size={18} />
+            Sign out
           </button>
         </div>
       </aside>
       <main className="main-content">
-        <Routes>
-          <Route index element={<Navigate to="/jobs" replace />} />
-          <Route path="/jobs" element={<JobsPage />} />
-          <Route path="/jobs/new" element={<CreateJobPage />} />
-          <Route path="/jobs/:jobId" element={<JobDetailPage />} />
-          <Route path="/jobs/:jobId/questions/new" element={<QuestionPage />} />
-          <Route path="/questions" element={<QuestionLibraryPage />} />
-          <Route path="/participants" element={<ParticipantsPage />} />
-          <Route path="/participants/new" element={<CreateParticipantPage />} />
-          <Route path="/participants/:participantId" element={<ParticipantDetailPage />} />
-          <Route path="/users" element={<UsersPage />} />
-          <Route path="/inbox" element={<InboxPage />} />
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/scheduled-interviews/:id" element={<ScheduledInterviewPage />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <WorkspaceUtilities user={user} />
+        <div className="workspace-content">
+          <Routes>
+            <Route index element={<Navigate to="/jobs" replace />} />
+            <Route path="/jobs" element={<JobsPage />} />
+            <Route path="/jobs/new" element={<CreateJobPage />} />
+            <Route path="/jobs/:jobId" element={<JobDetailPage />} />
+            <Route path="/jobs/:jobId/questions/new" element={<QuestionPage />} />
+            <Route path="/questions" element={<QuestionLibraryPage />} />
+            <Route path="/participants" element={<ParticipantsPage />} />
+            <Route path="/participants/new" element={<CreateParticipantPage />} />
+            <Route path="/participants/:participantId" element={<ParticipantDetailPage />} />
+            <Route path="/users" element={<UsersPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/inbox" element={<InboxPage />} />
+            <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/scheduled-interviews/:id" element={<ScheduledInterviewPage />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </div>
+        <AppFooter />
       </main>
     </div>
   )
