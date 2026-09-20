@@ -18,8 +18,10 @@ to return the dedicated server address before requesting a certificate.
 
 ## Nginx and Certbot
 
-The included virtual host assumes Nginx runs on the Kubernetes node and can
-reach the NodePort at `127.0.0.1:31374`.
+The included virtual host assumes Rancher runs in Docker on the Nginx server.
+It reaches the embedded K3s NodePort through Rancher's Docker bridge address,
+`172.17.0.2:31374`. Confirm that address with `docker inspect rancher` before
+installing the configuration.
 
 ```bash
 sudo install -m 0644 deploy/nginx/goguess.urpi.be.conf \
@@ -35,9 +37,8 @@ sudo certbot renew --dry-run
 Certbot adds the HTTPS listener, certificate paths, and HTTP-to-HTTPS redirect
 to this virtual host. Allow inbound TCP ports `80` and `443`. Do not expose
 NodePort `31374`, PostgreSQL `5432`, RabbitMQ `5672`, or RabbitMQ management
-ports to the public internet. If Nginx is not on a Kubernetes node, replace
-`127.0.0.1` in `proxy_pass` with a private cluster-node address and allow
-`31374` only from the Nginx server.
+ports to the public internet. If Rancher uses a different Docker address,
+replace `172.17.0.2` in `proxy_pass` with the current Rancher container address.
 
 ## Deploy and verify
 
@@ -47,7 +48,7 @@ Deploy the production profile:
 make helm-deploy-production
 kubectl -n go-guess-production get pods
 kubectl -n go-guess-production get service go-guess
-curl --fail http://127.0.0.1:31374/api/health
+curl --fail http://172.17.0.2:31374/api/health
 curl --fail https://goguess.urpi.be/api/health
 ```
 

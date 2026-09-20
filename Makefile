@@ -8,7 +8,7 @@ HELM ?= helm
 HELM_CHART := deploy/helm/go-guess
 HELM_RELEASE ?= go-guess
 HELM_NAMESPACE ?= go-guess
-KUBECONFIG ?= $(HOME)/.config/kubectl/rancher.urpi.local.yaml
+KUBECONFIG ?= $(HOME)/.config/kubectl/rancher.urpi.be.yaml
 
 .PHONY: help dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-bdd test-bdd-down test-env test-env-down lint build rancher-storage helm-lint helm-deploy-development helm-deploy-production
 
