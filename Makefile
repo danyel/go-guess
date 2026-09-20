@@ -10,7 +10,7 @@ HELM_RELEASE ?= go-guess
 HELM_NAMESPACE ?= go-guess
 KUBECONFIG ?= $(HOME)/.config/kubectl/rancher.urpi.local.yaml
 
-.PHONY: help dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-bdd test-bdd-down test-env test-env-down lint build helm-lint helm-deploy-development helm-deploy-production
+.PHONY: help dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-bdd test-bdd-down test-env test-env-down lint build rancher-storage helm-lint helm-deploy-development helm-deploy-production
 
 help:
 	@echo "make dev        				builds the demo docker image"
@@ -32,6 +32,7 @@ help:
 	@echo "make test-env-down      		stops the test image"
 	@echo "make lint      				runs lint on the frontend"
 	@echo "make build      				builds the entire project"
+	@echo "make rancher-storage			installs the persistent local-path StorageClass"
 	@echo "make helm-lint				lints development and production Helm configurations"
 	@echo "make helm-deploy-development	deploys the development Helm release"
 	@echo "make helm-deploy-production	deploys the production Helm release"
@@ -97,6 +98,9 @@ lint:
 build:
 	cd backend && go build ./...
 	cd frontend && npm run build
+
+rancher-storage:
+	KUBECONFIG="$(KUBECONFIG)" kubectl apply -f deploy/rancher/local-path.yaml
 
 helm-lint:
 	KUBECONFIG="$(KUBECONFIG)" $(HELM) lint $(HELM_CHART) -f $(HELM_CHART)/values-development.yaml

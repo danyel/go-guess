@@ -110,6 +110,19 @@ After deploying Go Guess, verify the application NodePort:
 curl --fail http://127.0.0.1:30080/api/health
 ```
 
+Production PostgreSQL and RabbitMQ require persistent volumes. Install the
+single-node local-path provisioner before the production Helm release:
+
+```bash
+make rancher-storage
+make helm-deploy-production
+```
+
+The provisioner stores data under `/var/lib/rancher/k3s/storage`, which is
+inside the persistent `/opt/rancher` host mount. Its StorageClass uses a
+`Retain` reclaim policy so deleting a claim does not automatically delete the
+underlying production data.
+
 Retrieve the one-time bootstrap password locally, open
 `https://127.0.0.1:8443`, and immediately choose a permanent administrator
 password:

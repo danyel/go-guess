@@ -126,6 +126,11 @@ make helm-deploy-development
 make helm-deploy-production
 ```
 
+For the repository's single-node Docker Rancher setup, run
+`make rancher-storage` once before the first production deployment. This
+installs the default persistent StorageClass documented in
+`rancher-install.txt`.
+
 Development uses demo fixtures, ephemeral database and message-broker storage,
 and NodePort `30080`. Production uses production fixtures, persistent volumes,
 generated secrets that are preserved across upgrades, and larger resource
