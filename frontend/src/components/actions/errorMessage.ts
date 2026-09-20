@@ -8,6 +8,6 @@ export function errorMessage(error: unknown) {
 
 export function message(error: unknown) {
   return error instanceof ApiError || error instanceof Error
-      ? error.message
-      : 'Something went wrong'
+    ? error.message
+    : 'Something went wrong'
 }

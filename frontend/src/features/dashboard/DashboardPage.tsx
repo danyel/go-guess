@@ -217,7 +217,7 @@ export function DashboardPage() {
             </span>
             <ArrowRight size={18} />
           </Link>
-          <Link to="/calendar">
+          <Link to="/schedule">
             <Sparkles size={20} />
             <span>
               <strong>Review the calendar</strong>

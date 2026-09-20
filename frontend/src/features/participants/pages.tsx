@@ -11,6 +11,7 @@ import {
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api/client'
+import { useDomainEvent } from '../../app/useDomainEvent'
 import { useData } from '../../app/useData'
 import { ErrorAlert, errorMessage, Loading } from '../../components/actions'
 import { FormActions, FormField } from '../../components/form'
@@ -210,6 +211,7 @@ export function ParticipantDetailPage() {
       .then(setPerson)
       .catch((value) => setError(errorMessage(value)))
   }, [id])
+  useDomainEvent<Participant>(`participants/${id}`, (event) => setPerson(event.data))
   if (error) return <ErrorAlert message={error} />
   if (!person) return <Loading />
 

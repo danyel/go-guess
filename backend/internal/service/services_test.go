@@ -34,6 +34,7 @@ type scheduledStore struct {
 	createdIDs []uint
 	status     string
 	document   string
+	attendee   model.InterviewAttendee
 }
 
 func (f *scheduledStore) GetInvitation(context.Context, uint, uint) (model.Invitation, error) {
@@ -67,6 +68,20 @@ func (f *scheduledStore) UpdateScheduledInterviewDocument(
 	f.document = document
 	f.interview.SharedDocument = document
 	return f.interview, nil
+}
+func (f *scheduledStore) UpdateAttendeeStatus(
+	_ context.Context, _, userID uint, status string,
+) (model.InterviewAttendee, error) {
+	f.attendee = model.InterviewAttendee{
+		UserID: userID, Status: status,
+		User: model.User{ID: userID, DisplayName: "Ada", Email: "ada@example.com"},
+	}
+	for index := range f.interview.Attendees {
+		if f.interview.Attendees[index].UserID == userID {
+			f.interview.Attendees[index] = f.attendee
+		}
+	}
+	return f.attendee, nil
 }
 func (f *scheduledStore) CreateInterviewNote(
 	_ context.Context, value model.InterviewNote,
@@ -414,6 +429,7 @@ func TestUpdateDocumentPublishesEvent(t *testing.T) {
 			ID: 9, Status: "scheduled", Attendees: []model.InterviewAttendee{{UserID: 1}},
 		},
 	}
+
 	bus := eventbus.NewMemoryBus()
 	events, err := bus.SubscribeInterviewEvents(context.Background())
 	if err != nil {
@@ -428,6 +444,36 @@ func TestUpdateDocumentPublishesEvent(t *testing.T) {
 	if updated.SharedDocument != "New agenda" || event.Type != "document.updated" ||
 		event.InterviewID != 9 || event.SharedDocument != "New agenda" {
 		t.Fatalf("unexpected document/event: %#v %#v", updated, event)
+	}
+}
+
+func TestStatusAndAttendeeUpdatesPublishEvents(t *testing.T) {
+	store := &scheduledStore{
+		fakeStore: &fakeStore{},
+		interview: model.ScheduledInterview{
+			ID: 9, Status: "scheduled",
+			Attendees: []model.InterviewAttendee{{UserID: 1, Status: "pending"}},
+		},
+	}
+	bus := eventbus.NewMemoryBus()
+	events, err := bus.SubscribeInterviewEvents(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	interviews := NewScheduledInterviewService(store, bus)
+	if _, err := interviews.UpdateStatus(context.Background(), 1, 9, "started"); err != nil {
+		t.Fatal(err)
+	}
+	if event := <-events; event.Type != "status.updated" || event.Status != "started" {
+		t.Fatalf("unexpected status event: %#v", event)
+	}
+	store.interview.Status = "scheduled"
+	if _, err := interviews.UpdateInbox(context.Background(), 1, 9, "accepted"); err != nil {
+		t.Fatal(err)
+	}
+	if event := <-events; event.Type != "attendee.updated" || event.Attendee == nil ||
+		event.Attendee.UserID != 1 || event.Attendee.Status != "accepted" {
+		t.Fatalf("unexpected attendee event: %#v", event)
 	}
 }
 
@@ -455,13 +501,26 @@ func TestParticipantSubscriptionFiltersPrivateNotes(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if err := bus.PublishInterviewEvent(ctx, eventbus.InterviewEvent{
+		Type: "status.updated", InterviewID: 0, Status: "started",
+	}); err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case event := <-events:
 		if event.Type != "document.updated" || event.SharedDocument != "candidate-safe" {
-			t.Fatalf("participant received unexpected event: %#v", event)
+			t.Fatalf("participant received unexpected document event: %#v", event)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("participant did not receive document event")
+	}
+	select {
+	case event := <-events:
+		if event.Type != "status.updated" || event.Status != "started" {
+			t.Fatalf("participant received unexpected event: %#v", event)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("participant did not receive status event")
 	}
 }
 

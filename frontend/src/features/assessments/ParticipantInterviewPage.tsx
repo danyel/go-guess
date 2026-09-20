@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, Check, CircleHelp, Clock3 } from 'lucide-react'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { api } from '../../api/client'
+import { useDomainEvent } from '../../app/useDomainEvent'
 import { ErrorAlert, errorMessage, Loading } from '../../components/actions'
 import Logo from '../../components/layout/Logo'
 import type { Interview } from '../../types'
@@ -40,6 +41,16 @@ export function ParticipantInterviewPage() {
     }
   }, [token])
 
+  useDomainEvent<Interview | undefined>(`interviews/${token}`, (event) => {
+    if (
+      !event.data ||
+      !['assessment-invitation.accepted', 'assessment-invitation.completed'].includes(event.type)
+    )
+      return
+    setInterview(event.data)
+    setAnswers(event.data.answers ?? {})
+  })
+
   const acceptedAt = interview?.invitation.acceptedAt
   const durationMinutes = interview?.job.durationMinutes
   useEffect(() => {
@@ -57,9 +68,7 @@ export function ParticipantInterviewPage() {
     setWorking(true)
     setError('')
     try {
-      const accepted = await api.interviews.accept(token)
-      setInterview(accepted)
-      setAnswers(accepted.answers ?? {})
+      await api.interviews.accept(token)
     } catch (requestError) {
       setError(errorMessage(requestError))
     } finally {
@@ -107,7 +116,7 @@ export function ParticipantInterviewPage() {
     setError('')
     try {
       await persistCurrent()
-      setInterview(await api.interviews.finish(token))
+      await api.interviews.finish(token)
     } catch (requestError) {
       finishing.current = false
       setError(errorMessage(requestError))

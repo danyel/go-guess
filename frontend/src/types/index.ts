@@ -101,6 +101,16 @@ export type InterviewEvent =
       interviewId: number
       sharedDocument: string
     }
+  | {
+      type: 'status.updated'
+      interviewId: number
+      status: string
+    }
+  | {
+      type: 'attendee.updated'
+      interviewId: number
+      attendee: InterviewAttendee
+    }
 
 export interface ScheduledInterview {
   id: number

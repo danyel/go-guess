@@ -1,3 +1,3 @@
-export {ProfilePage} from './ProfilePage';
-export {UsersPage} from './UsersPage';
-export {CalendarPage} from './CalendarPage';
+export { ProfilePage } from './ProfilePage'
+export { SchedulePage } from './SchedulePage'
+export { UsersPage } from './UsersPage'

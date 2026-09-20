@@ -224,7 +224,7 @@ describe('Go Guess frontend', () => {
       }),
     )
 
-    renderApp('/calendar')
+    renderApp('/schedule')
 
     expect(
       await screen.findByRole('heading', { name: 'Sign in to your workspace' }),
@@ -251,9 +251,9 @@ describe('Go Guess frontend', () => {
     expect(screen.getByText('admin@example.com')).toBeInTheDocument()
 
     const accountNavigation = screen.getByRole('navigation', { name: 'Account navigation' })
-    expect(within(accountNavigation).getByRole('link', { name: 'Inbox' })).toHaveAttribute(
+    expect(within(accountNavigation).getByRole('link', { name: 'Invitations' })).toHaveAttribute(
       'href',
-      '/inbox',
+      '/invitations',
     )
     expect(within(accountNavigation).getByRole('link', { name: 'Admin' })).toHaveAttribute(
       'href',
@@ -261,7 +261,9 @@ describe('Go Guess frontend', () => {
     )
 
     const primaryNavigation = screen.getByRole('navigation', { name: 'Primary navigation' })
-    expect(within(primaryNavigation).queryByRole('link', { name: 'Inbox' })).not.toBeInTheDocument()
+    expect(
+      within(primaryNavigation).queryByRole('link', { name: 'Invitations' }),
+    ).not.toBeInTheDocument()
 
     const footerNavigation = screen.getByRole('navigation', { name: 'Footer navigation' })
     expect(within(footerNavigation).getByRole('link', { name: 'Jobs' })).toHaveAttribute(
@@ -407,11 +409,24 @@ describe('Go Guess frontend', () => {
   it('attaches and detaches library questions without deleting them', async () => {
     authenticate()
     const user = userEvent.setup()
+    let attached = false
+    const defaultFetch = vi.mocked(fetch).getMockImplementation()
+    vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
+      const path = String(input)
+      const method = options?.method ?? 'GET'
+      if (path === '/api/jobs/7/questions/11') {
+        attached = method !== 'DELETE'
+        return response({}, method === 'DELETE' ? 200 : 201)
+      }
+      if (path === '/api/jobs/7') return response({ ...job, questions: attached ? [question] : [] })
+      if (!defaultFetch) throw new Error(`Unexpected request: ${path}`)
+      return defaultFetch(input, options)
+    })
     renderApp('/jobs/7')
 
     await user.click(await screen.findByRole('tab', { name: /questions/i }))
     await user.click(await screen.findByRole('button', { name: 'Attach' }))
-    await user.click(screen.getByRole('button', { name: `Detach ${question.text}` }))
+    await user.click(await screen.findByRole('button', { name: `Detach ${question.text}` }))
 
     expect(fetch).toHaveBeenCalledWith(
       '/api/jobs/7/questions/11',
@@ -838,7 +853,7 @@ describe('Go Guess frontend', () => {
     )
   })
 
-  it('accepts and declines interviews from the inbox', async () => {
+  it('updates an invitation card through its entity-scoped event', async () => {
     authenticate()
     const user = userEvent.setup()
     const scheduled = {
@@ -853,33 +868,48 @@ describe('Go Guess frontend', () => {
       candidateToken: 'meeting-token',
       candidateUrl: '/participant/meeting/meeting-token',
       sharedDocument: 'Agenda',
-      attendees: [],
+      attendees: [
+        {
+          userId: 1,
+          displayName: 'Admin',
+          email: 'admin@example.com',
+          status: 'pending',
+        },
+      ],
       notes: [],
     }
     const defaultFetch = vi.mocked(fetch).getMockImplementation()
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
       const path = String(input)
-      if (path === '/api/inbox' && !options?.method) return response([scheduled])
-      if (path === '/api/inbox/80')
-        return response({ ...scheduled, status: JSON.parse(String(options?.body)).status })
+      if (path === '/api/invitations' && !options?.method) return response([scheduled])
+      if (path === '/api/invitations/80')
+        return response({
+          ...scheduled,
+          attendees: [
+            {
+              ...scheduled.attendees[0],
+              status: JSON.parse(String(options?.body)).status,
+            },
+          ],
+        })
       if (!defaultFetch) throw new Error(`Unexpected request: ${path}`)
       return defaultFetch(input, options)
     })
-    renderApp('/inbox')
+    renderApp('/invitations')
     await user.click(await screen.findByRole('button', { name: 'Accept' }))
-    await user.click(screen.getByRole('button', { name: 'Decline' }))
     expect(fetch).toHaveBeenCalledWith(
-      '/api/inbox/80',
+      '/api/invitations/80',
       expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ status: 'accepted' }) }),
     )
-    expect(screen.getByText('declined')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Open session' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument()
   })
 
   it('groups calendar interviews by date and links to the session', async () => {
     authenticate()
     const defaultFetch = vi.mocked(fetch).getMockImplementation()
     vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
-      if (String(input) === '/api/calendar')
+      if (String(input) === '/api/schedule')
         return response([
           {
             id: 80,
@@ -900,7 +930,7 @@ describe('Go Guess frontend', () => {
       if (!defaultFetch) throw new Error(`Unexpected request: ${String(input)}`)
       return defaultFetch(input, options)
     })
-    renderApp('/calendar')
+    renderApp('/schedule')
     expect(await screen.findByText('Amélie Dubois')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open session' })).toHaveAttribute(
       'href',

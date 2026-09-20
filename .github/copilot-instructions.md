@@ -74,7 +74,7 @@ interviewer review uses
 Only completed assessment invitations can receive a `passed` or `failed` outcome,
 and only passed candidates can be scheduled for an interview. Scheduled
 interviews include the creator plus selected co-interviewers. Attendees manage
-their invitation through `/api/inbox`, see accepted interviews in `/api/calendar`,
+their invitation through `/api/invitations`, see accepted interviews in `/api/schedule`,
 and can write notes only after the interview has started. Notes are private to
 authenticated attendees. The opaque `/participant/meeting/:candidateToken` view
 exposes only candidate-safe schedule and shared-document data.

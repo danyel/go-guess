@@ -20,8 +20,8 @@ export const footerLinkGroups: FooterLinkGroup[] = [
   {
     title: 'Useful links',
     links: [
-      { label: 'Your inbox', href: '/inbox' },
-      { label: 'Calendar', href: '/calendar' },
+      { label: 'Invitations', href: '/invitations' },
+      { label: 'Schedule', href: '/schedule' },
       { label: 'Your profile', href: '/profile' },
       { label: 'Interview team', href: '/users' },
     ],

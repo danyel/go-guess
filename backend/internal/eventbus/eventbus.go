@@ -15,11 +15,20 @@ type InterviewNoteEvent struct {
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
+type InterviewAttendeeEvent struct {
+	UserID      uint   `json:"userId"`
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
+	Status      string `json:"status"`
+}
+
 type InterviewEvent struct {
-	Type           string              `json:"type"`
-	InterviewID    uint                `json:"interviewId"`
-	Note           *InterviewNoteEvent `json:"note,omitempty"`
-	SharedDocument string              `json:"sharedDocument,omitempty"`
+	Type           string                  `json:"type"`
+	InterviewID    uint                    `json:"interviewId"`
+	Note           *InterviewNoteEvent     `json:"note,omitempty"`
+	Attendee       *InterviewAttendeeEvent `json:"attendee,omitempty"`
+	Status         string                  `json:"status,omitempty"`
+	SharedDocument string                  `json:"sharedDocument,omitempty"`
 }
 
 type IEventBus interface {

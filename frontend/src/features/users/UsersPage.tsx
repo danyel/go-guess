@@ -1,6 +1,7 @@
 import { Plus } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 import { api, ApiError } from '../../api/client'
+import { useDomainEvent } from '../../app/useDomainEvent'
 import { ErrorAlert, Loading } from '../../components/ui/AsyncState'
 import type { User } from '../../types'
 
@@ -24,6 +25,10 @@ export function UsersPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  useDomainEvent<User>('users', (event) => {
+    setUsers((current) => [...current.filter((user) => user.id !== event.data.id), event.data])
+  })
+
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSaving(true)
@@ -31,12 +36,11 @@ export function UsersPage() {
     const form = event.currentTarget
     const values = new FormData(form)
     try {
-      const created = await api.users.create({
+      await api.users.create({
         email: String(values.get('email')),
         password: String(values.get('password')),
         displayName: String(values.get('displayName')),
       })
-      setUsers((current) => [...current, created])
       form.reset()
     } catch (value) {
       setError(errorMessage(value))

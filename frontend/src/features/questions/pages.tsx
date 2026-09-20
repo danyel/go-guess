@@ -2,6 +2,7 @@ import { ArrowLeft, Pencil, Plus, Search, X } from 'lucide-react'
 import { type FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api/client'
+import { useDomainEvent } from '../../app/useDomainEvent'
 import { ErrorAlert, errorMessage, Loading } from '../../components/actions'
 import { FormField } from '../../components/form'
 import { EmptyState } from '../../components/ui/Display'
@@ -266,25 +267,31 @@ export function QuestionLibraryPage() {
     }
   }, [query])
 
+  useDomainEvent<Question>('questions', (event) => {
+    setQuestions((current) => {
+      const existing = current.some((question) => question.id === event.data.id)
+      return existing
+        ? current.map((question) => (question.id === event.data.id ? event.data : question))
+        : [event.data, ...current]
+    })
+    setEditing((current) => (current?.id === event.data.id ? event.data : current))
+  })
+
   async function create(input: CreateQuestionInput) {
-    const created = await api.questions.create(input)
-    setQuestions((current) => [created, ...current])
+    await api.questions.create(input)
     setFormVersion((current) => current + 1)
   }
 
   async function update(input: CreateQuestionInput) {
     if (!editing) return
-    const updated = await api.questions.update(editing.id, input)
-    setQuestions((current) => current.map((item) => (item.id === updated.id ? updated : item)))
+    await api.questions.update(editing.id, input)
     setEditing(undefined)
   }
 
   async function toggle(question: Question) {
     setError('')
     try {
-      const updated = await api.questions.setDeprecated(question.id, !question.deprecated)
-      setQuestions((current) => current.map((item) => (item.id === updated.id ? updated : item)))
-      if (editing?.id === updated.id) setEditing(updated)
+      await api.questions.setDeprecated(question.id, !question.deprecated)
     } catch (requestError) {
       setError(errorMessage(requestError))
     }

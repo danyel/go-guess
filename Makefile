@@ -38,7 +38,7 @@ dev:
 	docker compose up --build
 
 db-up:
-	docker compose up -d db
+	docker compose up -d db rabbitmq
 
 db-down:
 	docker compose down

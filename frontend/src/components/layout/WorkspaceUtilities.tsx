@@ -6,13 +6,13 @@ export function WorkspaceUtilities({ user }: { user: User | null }) {
   const profileLabel = user?.displayName || user?.email || 'Profile'
   return (
     <nav className="workspace-utilities" aria-label="Account navigation">
-      <NavLink className="utility-link" to="/inbox">
+      <NavLink className="utility-link" to="/invitations">
         <Mail size={18} aria-hidden="true" />
-        <span>Inbox</span>
+        <span>Invitations</span>
       </NavLink>
-      <NavLink className="utility-link" to="/calendar">
+      <NavLink className="utility-link" to="/schedule">
         <CalendarDays size={18} aria-hidden="true" />
-        <span>Calendar</span>
+        <span>Schedule</span>
       </NavLink>
       <NavLink className="utility-link profile-utility" to="/profile">
         <span className="avatar tiny" aria-hidden="true">

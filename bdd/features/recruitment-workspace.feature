@@ -75,11 +75,11 @@ Feature: Recruitment workspace
 
   Scenario: User story - an interviewer can reach collaboration areas
     Given I am signed in as a valid interviewer
-    When I follow the "Inbox" link
-    Then I should see the heading "Inbox"
-    And I should see "Inbox zero"
-    When I follow the "Calendar" link
-    Then I should be on the "/calendar" page
+    When I follow the "Invitations" link
+    Then I should see the heading "Invitations"
+    And I should see "Invitation zero"
+    When I follow the "Schedule" link
+    Then I should be on the "/schedule" page
     And I should see "Schedule"
     When I follow the "Users" link
     Then I should see the heading "Interview team"

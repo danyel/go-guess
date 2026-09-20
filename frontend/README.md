@@ -67,8 +67,8 @@ Supported routes:
 - `PUT /api/interviews/:token/answers/:questionId`
 - `POST /api/interviews/:token/finish`
 - `GET|POST /api/users`
-- `GET /api/inbox` and `PATCH /api/inbox/:interviewId`
-- `GET /api/calendar`
+- `GET /api/invitations` and `PATCH /api/invitations/:interviewId`
+- `GET /api/schedule`
 - `GET /api/scheduled-interviews/:id`
 - `PATCH /api/scheduled-interviews/:id/status`
 - `PATCH /api/scheduled-interviews/:id/document`
@@ -98,9 +98,9 @@ form for the date, location, co-interviewers, and candidate-visible shared docum
 The authenticated workspace also includes:
 
 - **Users** for listing and creating co-interviewers.
-- **Inbox** in the top-right account navigation for accepting or declining assignments.
+- **Invitations** in the top-right account navigation for accepting or declining assignments.
 - **Profile** in the top-right account navigation for the logged-in user's identity and role.
-- **Calendar** for interviews grouped by date.
+- **Schedule** for interviews grouped by date.
 - **Interviewer sessions** for changing status, editing prominent shared documentation, and
   posting private notes while an interview is started. Notes and shared-document changes arrive
   live through an authenticated streaming `fetch`; the app intentionally does not use

@@ -297,14 +297,14 @@ func TestCompleteInterviewWorkflow(t *testing.T) {
 	}, http.StatusOK, &coLogin)
 
 	var inbox []webmodel.ScheduledInterviewResponse
-	requestJSON(t, http.MethodGet, "/api/inbox", coLogin.Token, nil, http.StatusOK, &inbox)
+	requestJSON(t, http.MethodGet, "/api/invitations", coLogin.Token, nil, http.StatusOK, &inbox)
 	if len(inbox) != 1 || inbox[0].ID != scheduled.ID {
 		t.Fatalf("scheduled interview missing from co-interviewer inbox: %#v", inbox)
 	}
-	requestJSON(t, http.MethodPatch, fmt.Sprintf("/api/inbox/%d", scheduled.ID),
+	requestJSON(t, http.MethodPatch, fmt.Sprintf("/api/invitations/%d", scheduled.ID),
 		coLogin.Token, map[string]any{"status": "accepted"}, http.StatusOK, &scheduled)
 	var calendar []webmodel.ScheduledInterviewResponse
-	requestJSON(t, http.MethodGet, "/api/calendar", coLogin.Token, nil, http.StatusOK, &calendar)
+	requestJSON(t, http.MethodGet, "/api/schedule", coLogin.Token, nil, http.StatusOK, &calendar)
 	if len(calendar) != 1 || calendar[0].ID != scheduled.ID {
 		t.Fatalf("accepted interview missing from calendar: %#v", calendar)
 	}

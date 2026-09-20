@@ -17,6 +17,7 @@ import type {
   User,
   InterviewNote,
 } from '../types'
+import { publishDomainEvent } from './domainEvents'
 
 const TOKEN_KEY = 'go-guess-token'
 const USER_KEY = 'go-guess-user'
@@ -115,7 +116,18 @@ async function requestBlob(path: string): Promise<Blob> {
     if (response.status === 401) invalidateSession()
     throw new ApiError(`Request failed with status ${response.status}`, response.status)
   }
+
   return response.blob()
+}
+
+async function mutation<T>(
+  response: Promise<T>,
+  type: string,
+  resources: (data: T) => string[],
+): Promise<T> {
+  const data = await response
+  publishDomainEvent(resources(data), type, data)
+  return data
 }
 
 async function subscribeToInterviewEvents(
@@ -181,18 +193,34 @@ export const api = {
     list: () => request<Job[]>('/jobs'),
     get: (id: number) => request<Job>(`/jobs/${id}`),
     create: (input: CreateJobInput) =>
-      request<Job>('/jobs', { method: 'POST', body: JSON.stringify(input) }),
+      mutation(
+        request<Job>('/jobs', { method: 'POST', body: JSON.stringify(input) }),
+        'job.created',
+        (job) => ['jobs', `jobs/${job.id}`],
+      ),
     update: (jobId: number, input: { status: JobStatus; durationMinutes: number }) =>
-      request<Job>(`/jobs/${jobId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(input),
-      }),
+      mutation(
+        request<Job>(`/jobs/${jobId}`, {
+          method: 'PATCH',
+          body: JSON.stringify(input),
+        }),
+        'job.updated',
+        () => ['jobs', `jobs/${jobId}`],
+      ),
     attachQuestion: (jobId: number, questionId: number) =>
-      request<void>(`/jobs/${jobId}/questions/${questionId}`, {
-        method: 'POST',
-      }),
+      mutation(
+        request<void>(`/jobs/${jobId}/questions/${questionId}`, {
+          method: 'POST',
+        }),
+        'job.question-attached',
+        () => ['jobs', `jobs/${jobId}`, `questions/${questionId}`],
+      ),
     detachQuestion: (jobId: number, questionId: number) =>
-      request<void>(`/jobs/${jobId}/questions/${questionId}`, { method: 'DELETE' }),
+      mutation(
+        request<void>(`/jobs/${jobId}/questions/${questionId}`, { method: 'DELETE' }),
+        'job.question-detached',
+        () => ['jobs', `jobs/${jobId}`, `questions/${questionId}`],
+      ),
     candidates: async (jobId: number) => {
       const matches = await request<CandidateMatch[]>(`/jobs/${jobId}/candidates`)
       return matches.map((match) => ({
@@ -205,50 +233,100 @@ export const api = {
     invitation: (jobId: number, invitationId: number) =>
       request<Interview>(`/jobs/${jobId}/invitations/${invitationId}`),
     invite: (jobId: number, participantId: number) =>
-      request<Invitation>(`/jobs/${jobId}/invitations`, {
-        method: 'POST',
-        body: JSON.stringify({ participantId }),
-      }),
+      mutation(
+        request<Invitation>(`/jobs/${jobId}/invitations`, {
+          method: 'POST',
+          body: JSON.stringify({ participantId }),
+        }),
+        'invitation.created',
+        (invitation) => [
+          `jobs/${jobId}`,
+          `job-invitations/${jobId}`,
+          `assessment-invitations/${invitation.id}`,
+        ],
+      ),
     setInvitationOutcome: (jobId: number, invitationId: number, outcome: Invitation['outcome']) =>
-      request<Invitation>(`/jobs/${jobId}/invitations/${invitationId}/outcome`, {
-        method: 'PATCH',
-        body: JSON.stringify({ outcome }),
-      }),
+      mutation(
+        request<Invitation>(`/jobs/${jobId}/invitations/${invitationId}/outcome`, {
+          method: 'PATCH',
+          body: JSON.stringify({ outcome }),
+        }),
+        'invitation.outcome-updated',
+        () => [
+          `jobs/${jobId}`,
+          `job-invitations/${jobId}`,
+          `assessment-invitations/${invitationId}`,
+        ],
+      ),
     interviews: (jobId: number) => request<ScheduledInterview[]>(`/jobs/${jobId}/interviews`),
     scheduleInterview: (jobId: number, input: CreateScheduledInterviewInput) =>
-      request<ScheduledInterview>(`/jobs/${jobId}/interviews`, {
-        method: 'POST',
-        body: JSON.stringify(input),
-      }),
+      mutation(
+        request<ScheduledInterview>(`/jobs/${jobId}/interviews`, {
+          method: 'POST',
+          body: JSON.stringify(input),
+        }),
+        'scheduled-interview.created',
+        (interview) => [
+          `jobs/${jobId}`,
+          'scheduled-interviews',
+          `scheduled-interviews/${interview.id}`,
+          'invitations',
+          'schedule',
+        ],
+      ),
   },
   questions: {
     list: (search = '') =>
       request<Question[]>(`/questions${search ? `?search=${encodeURIComponent(search)}` : ''}`),
     create: (input: CreateQuestionInput) =>
-      request<Question>('/questions', { method: 'POST', body: JSON.stringify(input) }),
+      mutation(
+        request<Question>('/questions', { method: 'POST', body: JSON.stringify(input) }),
+        'question.created',
+        (question) => ['questions', `questions/${question.id}`],
+      ),
     update: (id: number, input: CreateQuestionInput) =>
-      request<Question>(`/questions/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(input),
-      }),
+      mutation(
+        request<Question>(`/questions/${id}`, {
+          method: 'PUT',
+          body: JSON.stringify(input),
+        }),
+        'question.updated',
+        () => ['questions', `questions/${id}`],
+      ),
     setDeprecated: (id: number, deprecated: boolean) =>
-      request<Question>(`/questions/${id}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ deprecated }),
-      }),
+      mutation(
+        request<Question>(`/questions/${id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ deprecated }),
+        }),
+        'question.deprecation-updated',
+        () => ['questions', `questions/${id}`],
+      ),
   },
   interviews: {
     get: (token: string) => request<Interview>(`/interviews/${token}`, {}, false),
     accept: (token: string) =>
-      request<Interview>(`/interviews/${token}/accept`, { method: 'POST' }, false),
+      mutation(
+        request<Interview>(`/interviews/${token}/accept`, { method: 'POST' }, false),
+        'assessment-invitation.accepted',
+        (interview) => [`interviews/${token}`, `assessment-invitations/${interview.invitation.id}`],
+      ),
     answer: (token: string, questionId: number, answer: string) =>
-      request<void>(
-        `/interviews/${token}/answers/${questionId}`,
-        { method: 'PUT', body: JSON.stringify({ answer }) },
-        false,
+      mutation(
+        request<void>(
+          `/interviews/${token}/answers/${questionId}`,
+          { method: 'PUT', body: JSON.stringify({ answer }) },
+          false,
+        ),
+        'assessment-answer.saved',
+        () => [`interviews/${token}`],
       ),
     finish: (token: string) =>
-      request<Interview>(`/interviews/${token}/finish`, { method: 'POST' }, false),
+      mutation(
+        request<Interview>(`/interviews/${token}/finish`, { method: 'POST' }, false),
+        'assessment-invitation.completed',
+        (interview) => [`interviews/${token}`, `assessment-invitations/${interview.invitation.id}`],
+      ),
   },
   participants: {
     list: () => request<Participant[]>('/participants'),
@@ -264,41 +342,70 @@ export const api = {
       form.append('contactInfo', input.contactInfo)
       if (input.photo) form.append('photo', input.photo)
       if (input.cv) form.append('cv', input.cv)
-      return request<Participant>('/participants', { method: 'POST', body: form })
+      return mutation(
+        request<Participant>('/participants', { method: 'POST', body: form }),
+        'participant.created',
+        (participant) => ['participants', `participants/${participant.id}`],
+      )
     },
   },
   users: {
     list: () => request<User[]>('/users'),
     create: (input: { email: string; password: string; displayName: string }) =>
-      request<User>('/users', { method: 'POST', body: JSON.stringify(input) }),
+      mutation(
+        request<User>('/users', { method: 'POST', body: JSON.stringify(input) }),
+        'user.created',
+        (user) => ['users', `users/${user.id}`],
+      ),
   },
   inbox: {
-    list: () => request<ScheduledInterview[]>('/inbox'),
+    list: () => request<ScheduledInterview[]>('/invitations'),
     respond: (interviewId: number, status: 'accepted' | 'declined') =>
-      request<ScheduledInterview>(`/inbox/${interviewId}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status }),
-      }),
+      mutation(
+        request<ScheduledInterview>(`/invitations/${interviewId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status }),
+        }),
+        'interview-invitation.responded',
+        () => [
+          'invitations',
+          `invitations/${interviewId}`,
+          'schedule',
+          `scheduled-interviews/${interviewId}`,
+        ],
+      ),
   },
-  calendar: () => request<ScheduledInterview[]>('/calendar'),
+  calendar: () => request<ScheduledInterview[]>('/schedule'),
   scheduledInterviews: {
     get: (id: number) => request<ScheduledInterview>(`/scheduled-interviews/${id}`),
     setStatus: (id: number, status: string) =>
-      request<ScheduledInterview>(`/scheduled-interviews/${id}/status`, {
-        method: 'PATCH',
-        body: JSON.stringify({ status }),
-      }),
+      mutation(
+        request<ScheduledInterview>(`/scheduled-interviews/${id}/status`, {
+          method: 'PATCH',
+          body: JSON.stringify({ status }),
+        }),
+        'scheduled-interview.status-updated',
+        () => ['scheduled-interviews', `scheduled-interviews/${id}`, 'schedule', 'invitations'],
+      ),
     updateDocument: (id: number, sharedDocument: string) =>
-      request<ScheduledInterview>(`/scheduled-interviews/${id}/document`, {
-        method: 'PATCH',
-        body: JSON.stringify({ sharedDocument }),
-      }),
+      mutation(
+        request<ScheduledInterview>(`/scheduled-interviews/${id}/document`, {
+          method: 'PATCH',
+          body: JSON.stringify({ sharedDocument }),
+        }),
+        'scheduled-interview.document-updated',
+        () => [`scheduled-interviews/${id}`],
+      ),
     notes: (id: number) => request<InterviewNote[]>(`/scheduled-interviews/${id}/notes`),
     addNote: (id: number, body: string) =>
-      request<InterviewNote>(`/scheduled-interviews/${id}/notes`, {
-        method: 'POST',
-        body: JSON.stringify({ body }),
-      }),
+      mutation(
+        request<InterviewNote>(`/scheduled-interviews/${id}/notes`, {
+          method: 'POST',
+          body: JSON.stringify({ body }),
+        }),
+        'scheduled-interview.note-created',
+        () => [`scheduled-interviews/${id}/notes`],
+      ),
     subscribe: (
       id: number,
       onEvent: (event: InterviewEvent) => void,

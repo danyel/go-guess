@@ -6,7 +6,7 @@ import { GoGuessHeader } from '../components/layout/GoGuessHeader'
 import { WorkspaceUtilities } from '../components/layout/WorkspaceUtilities'
 import { NotFound } from '../components/ui/NotFound'
 import { DashboardPage } from '../features/dashboard/DashboardPage'
-import { InboxPage, ScheduledInterviewPage } from '../features/interviews'
+import { InvitationPage, ScheduledInterviewPage } from '../features/interviews'
 import { CreateJobPage, JobDetailPage, JobsPage } from '../features/jobs'
 import {
   CreateParticipantPage,
@@ -14,7 +14,7 @@ import {
   ParticipantsPage,
 } from '../features/participants'
 import { QuestionLibraryPage, QuestionPage } from '../features/questions'
-import { CalendarPage, ProfilePage, UsersPage } from '../features/users'
+import { SchedulePage, ProfilePage, UsersPage } from '../features/users'
 
 export function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
   const [open, setOpen] = useState(false)
@@ -37,8 +37,8 @@ export function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
             <Route path="/participants/:participantId" element={<ParticipantDetailPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/inbox" element={<InboxPage />} />
-            <Route path="/calendar" element={<CalendarPage />} />
+            <Route path="/invitations" element={<InvitationPage />} />
+            <Route path="/schedule" element={<SchedulePage />} />
             <Route path="/scheduled-interviews/:id" element={<ScheduledInterviewPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

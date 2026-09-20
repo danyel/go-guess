@@ -166,7 +166,16 @@ func (s *ScheduledInterviewService) UpdateStatus(
 	if !valid {
 		return model.ScheduledInterview{}, fmt.Errorf("%w: invalid interview status transition", ErrInvalidState)
 	}
-	return s.store.UpdateScheduledInterviewStatus(ctx, interviewID, status)
+	updated, err := s.store.UpdateScheduledInterviewStatus(ctx, interviewID, status)
+	if err != nil {
+		return model.ScheduledInterview{}, err
+	}
+	if err := s.bus.PublishInterviewEvent(ctx, eventbus.InterviewEvent{
+		Type: "status.updated", InterviewID: interviewID, Status: updated.Status,
+	}); err != nil {
+		return model.ScheduledInterview{}, fmt.Errorf("publish persisted interview status: %w", err)
+	}
+	return updated, nil
 }
 
 func (s *ScheduledInterviewService) UpdateDocument(
@@ -243,10 +252,24 @@ func (s *ScheduledInterviewService) UpdateInbox(
 	if status != "accepted" && status != "declined" {
 		return model.ScheduledInterview{}, fmt.Errorf("%w: attendee status must be accepted or declined", ErrValidation)
 	}
-	if _, err := s.store.UpdateAttendeeStatus(ctx, interviewID, userID, status); err != nil {
+	attendee, err := s.store.UpdateAttendeeStatus(ctx, interviewID, userID, status)
+	if err != nil {
 		return model.ScheduledInterview{}, err
 	}
-	return s.Get(ctx, userID, interviewID)
+	updated, err := s.Get(ctx, userID, interviewID)
+	if err != nil {
+		return model.ScheduledInterview{}, err
+	}
+	if err := s.bus.PublishInterviewEvent(ctx, eventbus.InterviewEvent{
+		Type: "attendee.updated", InterviewID: interviewID,
+		Attendee: &eventbus.InterviewAttendeeEvent{
+			UserID: attendee.UserID, DisplayName: attendee.User.DisplayName,
+			Email: attendee.User.Email, Status: attendee.Status,
+		},
+	}); err != nil {
+		return model.ScheduledInterview{}, fmt.Errorf("publish persisted attendee status: %w", err)
+	}
+	return updated, nil
 }
 
 func (s *ScheduledInterviewService) ListCalendar(
@@ -303,7 +326,7 @@ func (s *ScheduledInterviewService) subscribeToInterview(
 				if event.InterviewID != interviewID {
 					continue
 				}
-				if documentsOnly && event.Type != "document.updated" {
+				if documentsOnly && event.Type != "document.updated" && event.Type != "status.updated" {
 					continue
 				}
 				select {
