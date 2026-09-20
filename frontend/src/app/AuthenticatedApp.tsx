@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Route, Routes } from 'react-router-dom'
 import { authStorage } from '../api/client'
 import { AppFooter } from '../components/layout/AppFooter'
 import { GoGuessHeader } from '../components/layout/GoGuessHeader'
 import { WorkspaceUtilities } from '../components/layout/WorkspaceUtilities'
 import { NotFound } from '../components/ui/NotFound'
+import { DashboardPage } from '../features/dashboard/DashboardPage'
 import { InboxPage, ScheduledInterviewPage } from '../features/interviews'
 import { CreateJobPage, JobDetailPage, JobsPage } from '../features/jobs'
 import {
@@ -13,7 +14,7 @@ import {
   ParticipantsPage,
 } from '../features/participants'
 import { QuestionLibraryPage, QuestionPage } from '../features/questions'
-import {CalendarPage, ProfilePage, UsersPage} from '../features/users'
+import { CalendarPage, ProfilePage, UsersPage } from '../features/users'
 
 export function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
   const [open, setOpen] = useState(false)
@@ -25,7 +26,7 @@ export function AuthenticatedApp({ onLogout }: { onLogout: () => void }) {
         <WorkspaceUtilities user={user} />
         <div className="workspace-content">
           <Routes>
-            <Route index element={<Navigate to="/jobs" replace />} />
+            <Route index element={<DashboardPage />} />
             <Route path="/jobs" element={<JobsPage />} />
             <Route path="/jobs/new" element={<CreateJobPage />} />
             <Route path="/jobs/:jobId" element={<JobDetailPage />} />

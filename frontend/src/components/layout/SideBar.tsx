@@ -1,7 +1,7 @@
 import {
   BriefcaseBusiness,
-  CalendarDays,
   CircleHelp,
+  LayoutDashboard,
   LogOut,
   UserRound,
   UsersRound,
@@ -30,6 +30,7 @@ export function SideBar({
       </div>
       <nav aria-label="Primary navigation">
         <p className="nav-label">Workspace</p>
+        <NavItem to="/" label="Dashboard" icon={<LayoutDashboard size={20} />} close={close} />
         <NavItem to="/jobs" label="Jobs" icon={<BriefcaseBusiness size={20} />} close={close} />
         <NavItem
           to="/participants"

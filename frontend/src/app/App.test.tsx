@@ -158,10 +158,33 @@ describe('Go Guess frontend', () => {
     await user.type(screen.getByLabelText(/password/i), 'admin123')
     await user.click(screen.getByRole('button', { name: /sign in/i }))
 
-    expect(await screen.findByRole('heading', { name: 'Job postings' })).toBeInTheDocument()
-    expect(await screen.findByRole('link', { name: 'Senior Go Engineer' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { name: 'Your hiring pipeline, at a glance.' }),
+    ).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /Senior Go Engineer/ })).toBeInTheDocument()
     expect(sessionStorage.getItem('go-guess-token')).toBe('jwt-token')
-    expect(window.location.pathname).toBe('/jobs')
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it('shows dashboard metrics, graphs, and links on the main page', async () => {
+    authenticate()
+    renderApp()
+
+    expect(
+      await screen.findByRole('heading', { name: 'Your hiring pipeline, at a glance.' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Total jobs1/ })).toHaveAttribute('href', '/jobs')
+    expect(screen.getByRole('link', { name: /Participants1/ })).toHaveAttribute(
+      'href',
+      '/participants',
+    )
+    expect(screen.getByRole('meter', { name: 'Draft jobs' })).toHaveAttribute('aria-valuenow', '1')
+    expect(screen.getByRole('meter', { name: 'Go: 1 participants' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Senior Go Engineer/ })).toHaveAttribute(
+      'href',
+      '/jobs/7',
+    )
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', '/')
   })
 
   it('returns to login when the active session expires', async () => {

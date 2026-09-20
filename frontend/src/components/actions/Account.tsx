@@ -34,7 +34,7 @@ export function useAuthSession() {
   function completeLogin() {
     setAuthenticated(true)
     setSessionExpired(false)
-    navigate('/jobs', { replace: true })
+    navigate('/', { replace: true })
   }
 
   function logout() {
