@@ -43,7 +43,7 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom'
-import { api, ApiError, authStorage } from '../api/client'
+import { api, ApiError, authStorage, invalidateSession, SESSION_EXPIRED_EVENT } from '../api/client'
 import {
   CalendarPage,
   InboxPage,
@@ -168,7 +168,7 @@ function Logo() {
   )
 }
 
-function LoginPage({ onLogin }: { onLogin: () => void }) {
+function LoginPage({ onLogin, sessionExpired }: { onLogin: () => void; sessionExpired: boolean }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -210,6 +210,11 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
         <div className="login-card">
           <span className="eyebrow">Welcome back</span>
           <h2 id="login-title">Sign in to your workspace</h2>
+          {sessionExpired && (
+            <div className="session-notice" role="status">
+              Your session is no longer active. Sign in again to continue.
+            </div>
+          )}
           <p className="muted">Use your work account to continue.</p>
           <form onSubmit={submit} className="stack-form">
             <FormField label="Email address" htmlFor="email">
@@ -2391,17 +2396,43 @@ function NotFound() {
 
 export default function App() {
   const [authenticated, setAuthenticated] = useState(() => Boolean(authStorage.token()))
+  const [sessionExpired, setSessionExpired] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
 
+  useEffect(() => {
+    function sessionExpired() {
+      setAuthenticated(false)
+      setSessionExpired(true)
+      navigate('/login', { replace: true })
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, sessionExpired)
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, sessionExpired)
+  }, [navigate])
+
+  useEffect(() => {
+    if (!authenticated) return
+    const expiresAt = authStorage.expiresAt()
+    if (expiresAt === null) return
+    const remaining = expiresAt - Date.now()
+    if (remaining <= 0) {
+      invalidateSession()
+      return
+    }
+    const timeout = window.setTimeout(invalidateSession, remaining)
+    return () => window.clearTimeout(timeout)
+  }, [authenticated])
+
   function completeLogin() {
     setAuthenticated(true)
+    setSessionExpired(false)
     navigate('/jobs', { replace: true })
   }
 
   function logout() {
     authStorage.clear()
     setAuthenticated(false)
+    setSessionExpired(false)
   }
   if (location.pathname.startsWith('/participant/')) {
     return (
@@ -2412,7 +2443,9 @@ export default function App() {
       </Routes>
     )
   }
-  if (!authenticated) return <LoginPage onLogin={completeLogin} />
+  if (!authenticated) {
+    return <LoginPage onLogin={completeLogin} sessionExpired={sessionExpired} />
+  }
   return (
     <DataProvider>
       <AppLayout onLogout={logout} />

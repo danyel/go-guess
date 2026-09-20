@@ -164,6 +164,52 @@ describe('Go Guess frontend', () => {
     expect(window.location.pathname).toBe('/jobs')
   })
 
+  it('returns to login when the active session expires', async () => {
+    authenticate()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: 'session expired' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+
+    renderApp('/jobs')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Sign in to your workspace' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Your session is no longer active')
+    expect(sessionStorage.getItem('go-guess-token')).toBeNull()
+  })
+
+  it('rejects an already expired stored token without waiting for an API response', async () => {
+    const payload = btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) - 60 })).replace(
+      /=+$/,
+      '',
+    )
+    sessionStorage.setItem('go-guess-token', `header.${payload}.signature`)
+    sessionStorage.setItem(
+      'go-guess-user',
+      JSON.stringify({
+        id: 1,
+        email: 'admin@example.com',
+        displayName: 'Admin',
+        role: 'admin',
+      }),
+    )
+
+    renderApp('/calendar')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Sign in to your workspace' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Your session is no longer active')
+    expect(sessionStorage.getItem('go-guess-token')).toBeNull()
+  })
+
   it('filters jobs by title', async () => {
     authenticate()
     const user = userEvent.setup()

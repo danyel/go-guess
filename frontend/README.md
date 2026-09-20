@@ -37,7 +37,10 @@ application shell.
 
 Vite proxies `/api` to `http://localhost:8080`. Login stores the returned JWT in
 `sessionStorage`; protected requests send it as `Authorization: Bearer <token>`. API failures are
-shown in the UI and are never replaced with demo data.
+shown in the UI and are never replaced with demo data. A `401` from a protected
+JSON, file, or event-stream request clears authentication and returns the user to
+`/login`. The app also schedules logout from the JWT expiration claim so an idle
+expired session cannot remain on a protected page.
 
 Supported routes:
 

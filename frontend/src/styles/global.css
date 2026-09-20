@@ -338,6 +338,16 @@ button {
   font-size: 1.8rem;
   margin-bottom: 0.5rem;
 }
+.session-notice {
+  margin-top: 1rem;
+  padding: 0.8rem 0.9rem;
+  color: #6f5513;
+  border: 1px solid #e6ce83;
+  border-radius: 9px;
+  background: #fff8dc;
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
 .stack-form {
   display: flex;
   flex-direction: column;

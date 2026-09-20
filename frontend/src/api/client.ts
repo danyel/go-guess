@@ -20,6 +20,7 @@ import type {
 
 const TOKEN_KEY = 'go-guess-token'
 const USER_KEY = 'go-guess-user'
+export const SESSION_EXPIRED_EVENT = 'go-guess:session-expired'
 
 export class ApiError extends Error {
   constructor(
@@ -45,6 +46,23 @@ export const authStorage = {
     sessionStorage.removeItem(TOKEN_KEY)
     sessionStorage.removeItem(USER_KEY)
   },
+  expiresAt: () => {
+    try {
+      const payload = sessionStorage.getItem(TOKEN_KEY)?.split('.')[1]
+      if (!payload) return null
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/')
+      const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+      const claims = JSON.parse(atob(padded)) as { exp?: unknown }
+      return typeof claims.exp === 'number' ? claims.exp * 1000 : null
+    } catch {
+      return null
+    }
+  },
+}
+
+export function invalidateSession() {
+  authStorage.clear()
+  window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT))
 }
 
 async function request<T>(
@@ -78,7 +96,7 @@ async function request<T>(
     } catch {
       details = undefined
     }
-    if (response.status === 401 && protectedRequest) authStorage.clear()
+    if (response.status === 401 && protectedRequest) invalidateSession()
     throw new ApiError(message, response.status, details)
   }
   if (response.status === 204) return undefined as T
@@ -93,8 +111,10 @@ async function requestBlob(path: string): Promise<Blob> {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   })
-  if (!response.ok)
+  if (!response.ok) {
+    if (response.status === 401) invalidateSession()
     throw new ApiError(`Request failed with status ${response.status}`, response.status)
+  }
   return response.blob()
 }
 
@@ -115,8 +135,10 @@ async function subscribeToInterviewEvents(
         },
         signal,
       })
-      if (!response.ok || !response.body)
+      if (!response.ok || !response.body) {
+        if (response.status === 401 && protectedRequest) invalidateSession()
         throw new ApiError(`Live updates failed with status ${response.status}`, response.status)
+      }
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ''

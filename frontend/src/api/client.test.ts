@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, authStorage } from './client'
+import { api, authStorage, SESSION_EXPIRED_EVENT } from './client'
 
 describe('API client', () => {
   beforeEach(() => {
@@ -11,6 +11,7 @@ describe('API client', () => {
       token: 'signed-jwt',
       user: { id: 1, email: 'admin@example.com', displayName: 'Admin', role: 'admin' },
     })
+
     const fetchMock = vi.fn().mockResolvedValue(new Response('[]', { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
@@ -22,6 +23,30 @@ describe('API client', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer signed-jwt' }),
       }),
     )
+  })
+
+  it('invalidates the session when a protected request is unauthorized', async () => {
+    authStorage.save({
+      token: 'expired-jwt',
+      user: { id: 1, email: 'admin@example.com', displayName: 'Admin', role: 'admin' },
+    })
+    const expired = vi.fn()
+    window.addEventListener(SESSION_EXPIRED_EVENT, expired, { once: true })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: 'session expired' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    )
+
+    await expect(api.jobs.list()).rejects.toMatchObject({ status: 401 })
+
+    expect(authStorage.token()).toBeNull()
+    expect(authStorage.user()).toBeNull()
+    expect(expired).toHaveBeenCalledOnce()
   })
 
   it('uses the backend participant multipart field names', async () => {
