@@ -8,9 +8,9 @@ HELM ?= helm
 HELM_CHART := deploy/helm/go-guess
 HELM_RELEASE ?= go-guess
 HELM_NAMESPACE ?= go-guess
-KUBECONFIG ?= $(HOME)/.config/kubectl/rancher.urpi.be.yaml
+KUBECONFIG ?= $(HOME)/.config/kubectl/rancher.urpi.local.yaml
 
-.PHONY: help dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-bdd test-bdd-down test-env test-env-down lint build rancher-storage helm-lint helm-deploy-development helm-deploy-production
+.PHONY: help dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-bdd test-bdd-down test-env test-env-down lint build rancher-storage helm-lint helm-deploy-development helm-deploy-production helm-down-production helm-down-development
 
 help:
 	@echo "make dev        				builds the demo docker image"
@@ -36,6 +36,8 @@ help:
 	@echo "make helm-lint				lints development and production Helm configurations"
 	@echo "make helm-deploy-development	deploys the development Helm release"
 	@echo "make helm-deploy-production	deploys the production Helm release"
+	@echo "make helm-down-development	shuts down the development Helm release"
+	@echo "make helm-down-production	shuts down the production Helm release"
 dev:
 	docker compose up --build
 
@@ -111,13 +113,17 @@ helm-lint:
 		-f $(HELM_CHART)/values-production.yaml >/dev/null
 
 helm-deploy-development:
-	KUBECONFIG="$(KUBECONFIG)" $(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
-		--namespace $(HELM_NAMESPACE)-development --create-namespace \
-		-f $(HELM_CHART)/values-development.yaml \
-		--rollback-on-failure --wait --timeout 10m
+	KUBECONFIG="$(KUBECONFIG)" $(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) --namespace $(HELM_NAMESPACE)-development --create-namespace -f $(HELM_CHART)/values-development.yaml --rollback-on-failure --wait --timeout 10m
 
 helm-deploy-production:
 	KUBECONFIG="$(KUBECONFIG)" $(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
 		--namespace $(HELM_NAMESPACE)-production --create-namespace \
-		-f $(HELM_CHART)/values-production.yaml \
-		--rollback-on-failure --wait --timeout 10m
+		-f $(HELM_CHART)/values-production.yaml --wait --timeout 10m\
+		--set secrets.postgresqlPassword="go_guess" \
+		--set secrets.rabbitmqPassword="guest"
+
+helm-down-production:
+	KUBECONFIG="$(KUBECONFIG)" $(HELM) uninstall $(HELM_RELEASE) -n $(HELM_NAMESPACE)-production
+
+helm-down-development:
+	KUBECONFIG="$(KUBECONFIG)" $(HELM) uninstall $(HELM_RELEASE) -n $(HELM_NAMESPACE)-development
