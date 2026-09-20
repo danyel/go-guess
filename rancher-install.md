@@ -70,11 +70,11 @@ docker run -d \
   --restart=unless-stopped \
   -p 127.0.0.1:8000:80 \
   -p 127.0.0.1:8443:443 \
-  -p 127.0.0.1:30080:30080 \
-  -p 127.0.0.1:31374:31374 \
+  -p 127.0.0.1:10000:10000 \
+  -p 127.0.0.1:10100:10100 \
   -v /opt/rancher:/var/lib/rancher \
   -v "$HOME/.config/kubectl/registries.yaml:/etc/rancher/k3s/registries.yaml:ro" \
-  --privileged \
+  --privileged \ 
   --name rancher \
   rancher/rancher@sha256:5f6c4dc52a05e0c400b53c08bf778ca55790f277e443b5881269158499b7ebe5
 ```
