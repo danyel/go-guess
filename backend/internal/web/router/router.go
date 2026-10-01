@@ -7,65 +7,126 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danyel/go-guess/backend/internal/eventbus"
 	"github.com/danyel/go-guess/backend/internal/security"
 	"github.com/danyel/go-guess/backend/internal/web/handler"
 	mw "github.com/danyel/go-guess/backend/internal/web/middleware"
+	webmodel "github.com/danyel/go-guess/backend/internal/web/model"
+	"github.com/danyel/go-guess/backend/internal/web/openapi"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
 
 func New(h *handler.Handler, tokens security.ITokenManager, frontendURL string) http.Handler {
 	router := chi.NewRouter()
+	spec := openapi.New()
 	router.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer, middleware.Compress(5))
 	router.Use(cors(frontendURL))
 	router.Use(mw.TenantSchemaMiddleware(h.Db()))
 	router.Use(middleware.Timeout(2 * time.Minute))
-	router.Get("/api/health", h.Health)
-	router.Post("/api/auth/login", h.Login)
-	router.Get("/api/interviews/{token}", h.GetInterview)
-	router.Post("/api/interviews/{token}/accept", h.AcceptInterview)
-	router.Put("/api/interviews/{token}/answers/{questionId}", h.SaveAnswer)
-	router.Post("/api/interviews/{token}/finish", h.FinishInterview)
-	router.Get("/api/participant-meetings/{token}", h.GetParticipantMeeting)
-	router.Get("/api/participant-meetings/{token}/events", h.ParticipantMeetingEvents)
+	register(router, spec, false, http.MethodGet, "/api/openapi.json", spec.ServeHTTP,
+		openapi.Operation{Summary: "Get the current OpenAPI contract", Response: map[string]any{}, NoTenant: true})
+	register(router, spec, false, http.MethodGet, "/api/health", h.Health,
+		openapi.Operation{Summary: "Check API health", Response: map[string]string{}, NoTenant: true})
+	register(router, spec, false, http.MethodPost, "/api/auth/login", h.Login,
+		openapi.Operation{Summary: "Authenticate an interviewer", Request: webmodel.LoginRequest{}, Response: webmodel.LoginResponse{}})
+	register(router, spec, false, http.MethodGet, "/api/interviews/{token}", h.GetInterview,
+		openapi.Operation{Summary: "Get a participant assessment", Response: webmodel.InterviewResponse{}})
+	register(router, spec, false, http.MethodPost, "/api/interviews/{token}/accept", h.AcceptInterview,
+		openapi.Operation{Summary: "Accept a participant assessment", Response: webmodel.InterviewResponse{}})
+	register(router, spec, false, http.MethodPut, "/api/interviews/{token}/answers/{questionId}", h.SaveAnswer,
+		openapi.Operation{Summary: "Save a participant answer", Request: webmodel.AnswerRequest{}, SuccessStatus: http.StatusNoContent})
+	register(router, spec, false, http.MethodPost, "/api/interviews/{token}/finish", h.FinishInterview,
+		openapi.Operation{Summary: "Finish a participant assessment", Response: webmodel.InterviewResponse{}})
+	register(router, spec, false, http.MethodGet, "/api/participant-meetings/{token}", h.GetParticipantMeeting,
+		openapi.Operation{Summary: "Get a participant meeting", Response: webmodel.ParticipantMeetingResponse{}})
+	register(router, spec, false, http.MethodGet, "/api/participant-meetings/{token}/events", h.ParticipantMeetingEvents,
+		openapi.Operation{Summary: "Stream participant meeting events", Response: eventbus.InterviewEvent{}, ResponseContentType: "text/event-stream"})
 	router.Group(func(protected chi.Router) {
 		protected.Use(authenticate(tokens))
-		protected.Get("/api/jobs", h.ListJobs)
-		protected.Post("/api/jobs", h.CreateJob)
-		protected.Get("/api/jobs/{id}", h.GetJob)
-		protected.Patch("/api/jobs/{id}", h.UpdateJob)
-		protected.Post("/api/jobs/{id}/questions/{questionId}", h.AttachQuestion)
-		protected.Delete("/api/jobs/{id}/questions/{questionId}", h.DetachQuestion)
-		protected.Get("/api/jobs/{id}/candidates", h.Candidates)
-		protected.Get("/api/jobs/{id}/invitations", h.ListInvitations)
-		protected.Post("/api/jobs/{id}/invitations", h.CreateInvitation)
-		protected.Get("/api/jobs/{id}/invitations/{invitationId}", h.ReviewInvitation)
-		protected.Patch("/api/jobs/{id}/invitations/{invitationId}/outcome", h.SetInvitationOutcome)
-		protected.Get("/api/jobs/{id}/interviews", h.ListScheduledInterviews)
-		protected.Post("/api/jobs/{id}/interviews", h.CreateScheduledInterview)
-		protected.Get("/api/scheduled-interviews/{id}", h.GetScheduledInterview)
-		protected.Patch("/api/scheduled-interviews/{id}/status", h.UpdateScheduledInterviewStatus)
-		protected.Patch("/api/scheduled-interviews/{id}/document", h.UpdateScheduledInterviewDocument)
-		protected.Get("/api/scheduled-interviews/{id}/notes", h.ListInterviewNotes)
-		protected.Post("/api/scheduled-interviews/{id}/notes", h.CreateInterviewNote)
-		protected.Get("/api/scheduled-interviews/{id}/events", h.InterviewEvents)
-		protected.Get("/api/users", h.ListUsers)
-		protected.Post("/api/users", h.CreateUser)
-		protected.Get("/api/invitations", h.ListInbox)
-		protected.Patch("/api/invitations/{id}", h.UpdateInbox)
-		protected.Get("/api/schedule", h.ListCalendar)
-		protected.Get("/api/questions", h.ListQuestions)
-		protected.Post("/api/questions", h.CreateQuestion)
-		protected.Put("/api/questions/{id}", h.UpdateQuestion)
-		protected.Patch("/api/questions/{id}", h.SetQuestionDeprecated)
-		protected.Get("/api/participants", h.ListParticipants)
-		protected.Post("/api/participants", h.CreateParticipant)
-		protected.Get("/api/participants/{id}", h.GetParticipant)
-		protected.Put("/api/participants/{id}/cv", h.UpdateParticipantCV)
-		protected.Get("/api/participants/{id}/photo", h.ParticipantPhoto)
-		protected.Get("/api/participants/{id}/cv", h.ParticipantCV)
+		register(protected, spec, true, http.MethodGet, "/api/jobs", h.ListJobs,
+			openapi.Operation{Summary: "List job postings", Response: []webmodel.JobResponse{}})
+		register(protected, spec, true, http.MethodPost, "/api/jobs", h.CreateJob,
+			openapi.Operation{Summary: "Create a job posting", Request: webmodel.JobRequest{}, Response: webmodel.JobResponse{}, SuccessStatus: http.StatusCreated})
+		register(protected, spec, true, http.MethodGet, "/api/jobs/{id}", h.GetJob,
+			openapi.Operation{Summary: "Get a job posting", Response: webmodel.JobResponse{}})
+		register(protected, spec, true, http.MethodPatch, "/api/jobs/{id}", h.UpdateJob,
+			openapi.Operation{Summary: "Update job status and duration", Request: webmodel.JobStatusRequest{}, Response: webmodel.JobResponse{}})
+		register(protected, spec, true, http.MethodPost, "/api/jobs/{id}/questions/{questionId}", h.AttachQuestion,
+			openapi.Operation{Summary: "Attach a question to a job", SuccessStatus: http.StatusNoContent})
+		register(protected, spec, true, http.MethodDelete, "/api/jobs/{id}/questions/{questionId}", h.DetachQuestion,
+			openapi.Operation{Summary: "Detach a question from a job", SuccessStatus: http.StatusNoContent})
+		register(protected, spec, true, http.MethodGet, "/api/jobs/{id}/candidates", h.Candidates,
+			openapi.Operation{Summary: "List matching candidates", Response: []webmodel.CandidateResponse{}})
+		register(protected, spec, true, http.MethodGet, "/api/jobs/{id}/invitations", h.ListInvitations,
+			openapi.Operation{Summary: "List job invitations", Response: []webmodel.InvitationResponse{}})
+		register(protected, spec, true, http.MethodPost, "/api/jobs/{id}/invitations", h.CreateInvitation,
+			openapi.Operation{Summary: "Create a participant invitation", Request: webmodel.InvitationRequest{}, Response: webmodel.InvitationResponse{}, SuccessStatus: http.StatusCreated})
+		register(protected, spec, true, http.MethodGet, "/api/jobs/{id}/invitations/{invitationId}", h.ReviewInvitation,
+			openapi.Operation{Summary: "Review invitation answers", Response: webmodel.InvitationReviewResponse{}})
+		register(protected, spec, true, http.MethodPatch, "/api/jobs/{id}/invitations/{invitationId}/outcome", h.SetInvitationOutcome,
+			openapi.Operation{Summary: "Set an invitation outcome", Request: webmodel.InvitationOutcomeRequest{}, Response: webmodel.InvitationResponse{}})
+		register(protected, spec, true, http.MethodGet, "/api/jobs/{id}/interviews", h.ListScheduledInterviews,
+			openapi.Operation{Summary: "List scheduled job interviews", Response: []webmodel.ScheduledInterviewResponse{}})
+		register(protected, spec, true, http.MethodPost, "/api/jobs/{id}/interviews", h.CreateScheduledInterview,
+			openapi.Operation{Summary: "Schedule an interview", Request: webmodel.CreateScheduledInterviewRequest{}, Response: webmodel.ScheduledInterviewResponse{}, SuccessStatus: http.StatusCreated})
+		register(protected, spec, true, http.MethodGet, "/api/scheduled-interviews/{id}", h.GetScheduledInterview,
+			openapi.Operation{Summary: "Get a scheduled interview", Response: webmodel.ScheduledInterviewResponse{}})
+		register(protected, spec, true, http.MethodPatch, "/api/scheduled-interviews/{id}/status", h.UpdateScheduledInterviewStatus,
+			openapi.Operation{Summary: "Update interview status", Request: webmodel.InterviewStatusRequest{}, Response: webmodel.ScheduledInterviewResponse{}})
+		register(protected, spec, true, http.MethodPatch, "/api/scheduled-interviews/{id}/document", h.UpdateScheduledInterviewDocument,
+			openapi.Operation{Summary: "Update shared interview document", Request: webmodel.InterviewDocumentRequest{}, Response: webmodel.ScheduledInterviewResponse{}})
+		register(protected, spec, true, http.MethodGet, "/api/scheduled-interviews/{id}/notes", h.ListInterviewNotes,
+			openapi.Operation{Summary: "List interview notes", Response: []webmodel.InterviewNoteResponse{}})
+		register(protected, spec, true, http.MethodPost, "/api/scheduled-interviews/{id}/notes", h.CreateInterviewNote,
+			openapi.Operation{Summary: "Create an interview note", Request: webmodel.InterviewNoteRequest{}, Response: webmodel.InterviewNoteResponse{}, SuccessStatus: http.StatusCreated})
+		register(protected, spec, true, http.MethodGet, "/api/scheduled-interviews/{id}/events", h.InterviewEvents,
+			openapi.Operation{Summary: "Stream interview events", Response: eventbus.InterviewEvent{}, ResponseContentType: "text/event-stream"})
+		register(protected, spec, true, http.MethodGet, "/api/users", h.ListUsers,
+			openapi.Operation{Summary: "List interviewer users", Response: []webmodel.User{}})
+		register(protected, spec, true, http.MethodPost, "/api/users", h.CreateUser,
+			openapi.Operation{Summary: "Create an interviewer user", Request: webmodel.CreateUserRequest{}, Response: webmodel.User{}, SuccessStatus: http.StatusCreated})
+		register(protected, spec, true, http.MethodGet, "/api/invitations", h.ListInbox,
+			openapi.Operation{Summary: "List interviewer invitations", Response: []webmodel.ScheduledInterviewResponse{}})
+		register(protected, spec, true, http.MethodPatch, "/api/invitations/{id}", h.UpdateInbox,
+			openapi.Operation{Summary: "Respond to an interviewer invitation", Request: webmodel.AttendeeStatusRequest{}, Response: webmodel.ScheduledInterviewResponse{}})
+		register(protected, spec, true, http.MethodGet, "/api/schedule", h.ListCalendar,
+			openapi.Operation{Summary: "List accepted interview schedule", Response: []webmodel.ScheduledInterviewResponse{}})
+		register(protected, spec, true, http.MethodGet, "/api/questions", h.ListQuestions,
+			openapi.Operation{Summary: "List questions", Response: []webmodel.QuestionResponse{}, QueryParameters: []string{"search"}})
+		register(protected, spec, true, http.MethodPost, "/api/questions", h.CreateQuestion,
+			openapi.Operation{Summary: "Create a question", Request: webmodel.QuestionRequest{}, Response: webmodel.QuestionResponse{}, SuccessStatus: http.StatusCreated})
+		register(protected, spec, true, http.MethodPut, "/api/questions/{id}", h.UpdateQuestion,
+			openapi.Operation{Summary: "Update a question", Request: webmodel.QuestionRequest{}, Response: webmodel.QuestionResponse{}})
+		register(protected, spec, true, http.MethodPatch, "/api/questions/{id}", h.SetQuestionDeprecated,
+			openapi.Operation{Summary: "Change question deprecation", Request: webmodel.QuestionStatusRequest{}, Response: webmodel.QuestionResponse{}})
+		register(protected, spec, true, http.MethodGet, "/api/participants", h.ListParticipants,
+			openapi.Operation{Summary: "List participants", Response: []webmodel.ParticipantResponse{}})
+		register(protected, spec, true, http.MethodPost, "/api/participants", h.CreateParticipant,
+			openapi.Operation{Summary: "Create a participant", Request: openapi.ParticipantForm{}, Response: webmodel.ParticipantResponse{}, SuccessStatus: http.StatusCreated, RequestContentType: "multipart/form-data"})
+		register(protected, spec, true, http.MethodGet, "/api/participants/{id}", h.GetParticipant,
+			openapi.Operation{Summary: "Get a participant", Response: webmodel.ParticipantResponse{}})
+		register(protected, spec, true, http.MethodPut, "/api/participants/{id}/cv", h.UpdateParticipantCV,
+			openapi.Operation{Summary: "Replace a participant CV", Request: openapi.CVForm{}, Response: webmodel.ParticipantResponse{}, RequestContentType: "multipart/form-data"})
+		register(protected, spec, true, http.MethodGet, "/api/participants/{id}/photo", h.ParticipantPhoto,
+			openapi.Operation{Summary: "Download a participant photo", Response: []byte{}, ResponseContentType: "application/octet-stream"})
+		register(protected, spec, true, http.MethodGet, "/api/participants/{id}/cv", h.ParticipantCV,
+			openapi.Operation{Summary: "Download a participant CV", Response: []byte{}, ResponseContentType: "application/octet-stream"})
 	})
 	return router
+}
+
+func register(
+	router chi.Router,
+	spec *openapi.Builder,
+	protected bool,
+	method, path string,
+	handler http.HandlerFunc,
+	operation openapi.Operation,
+) {
+	operation.Protected = protected
+	spec.Add(method, path, operation)
+	router.MethodFunc(method, path, handler)
 }
 
 func writeUnauthorized(w http.ResponseWriter, message string) {

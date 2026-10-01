@@ -95,5 +95,8 @@ exposes only candidate-safe schedule and shared-document data.
   unexpected failures instead of silently falling back.
 - Update the directly related local documentation whenever behavior,
   configuration, architecture, commands, or public API surfaces change.
+- Register backend routes through the typed OpenAPI-aware router helper. The
+  runtime `/api/openapi.json` document is the API source of truth; do not add a
+  manually maintained route inventory or require a generation command.
 - Commit every repository change with a meaningful conventional prefix such as
   `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, or `chore:`.

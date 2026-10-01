@@ -54,6 +54,19 @@ hostnames; the API CORS policy permits `*.guess.local` development origins and
 the `X-Tenant-Id` request header. Non-local deployments keep using same-origin
 `/api`. Set a different secure `JWT_SECRET` outside local development.
 
+## API contract
+
+The backend exposes its current OpenAPI 3.0 contract at
+<http://localhost:8080/api/openapi.json>. The document is assembled in memory
+from the same typed registrations that add routes to Chi, including request and
+response schemas, status codes, authentication, tenant headers, path/query
+parameters, multipart uploads, downloads, and event streams. It therefore
+requires no generation command and cannot miss a newly registered route.
+
+`/api/openapi.json` and `/api/health` are system endpoints and do not require a
+tenant header. All tenant data endpoints declare `X-Tenant-Id`; protected
+operations additionally declare JWT bearer authentication.
+
 ## Quality commands
 
 ```bash

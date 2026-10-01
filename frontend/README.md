@@ -52,40 +52,11 @@ JSON, file, or event-stream request clears authentication and returns the user t
 `/login`. The app also schedules logout from the JWT expiration claim so an idle
 expired session cannot remain on a protected page.
 
-Supported routes:
-
-- `POST /api/auth/login`
-- `GET|POST /api/jobs`
-- `GET /api/jobs/:id`
-- `PATCH /api/jobs/:id` for interview status and duration
-- `POST|DELETE /api/jobs/:id/questions/:questionId`
-- `GET /api/jobs/:id/candidates`
-- `GET|POST /api/jobs/:id/invitations`
-- `GET /api/jobs/:jobId/invitations/:invitationId` for protected answer review
-- `PATCH /api/jobs/:jobId/invitations/:invitationId/outcome`
-- `GET|POST /api/jobs/:jobId/interviews`
-- `GET|POST /api/questions` (`GET` accepts `?search=`)
-- `PUT /api/questions/:id` to update question text, type, options, reference answer, and code snippet
-- `PATCH /api/questions/:id` to deprecate or restore a question
-- `GET|POST /api/participants`
-- `GET /api/participants/:id`
-- `PUT /api/participants/:id/cv`
-- `GET /api/participants/:id/photo`
-- `GET /api/participants/:id/cv`
-- `GET /api/interviews/:token`
-- `POST /api/interviews/:token/accept`
-- `PUT /api/interviews/:token/answers/:questionId`
-- `POST /api/interviews/:token/finish`
-- `GET|POST /api/users`
-- `GET /api/invitations` and `PATCH /api/invitations/:interviewId`
-- `GET /api/schedule`
-- `GET /api/scheduled-interviews/:id`
-- `PATCH /api/scheduled-interviews/:id/status`
-- `PATCH /api/scheduled-interviews/:id/document`
-- `GET|POST /api/scheduled-interviews/:id/notes`
-- `GET /api/scheduled-interviews/:id/events` (authenticated fetch-based SSE)
-- `GET /api/participant-meetings/:token` (public)
-- `GET /api/participant-meetings/:token/events` (token-authorized SSE)
+The machine-readable OpenAPI 3.0 contract at `/api/openapi.json` is the source
+of truth for supported routes and schemas. It is assembled by the backend from
+the same typed calls that register Chi routes, so there is no generated file or
+manual update command. Do not duplicate a route inventory here; inspect the
+contract instead.
 
 Participant creation uses multipart fields `firstName`, `lastName`, `birthday`, `email`,
 `contactInfo`, `photo`, and `cv`.
