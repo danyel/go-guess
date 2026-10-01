@@ -47,7 +47,8 @@ The required toolchain is Go 1.27.1 and React 19.3 with TypeScript/Vite. Use
 - Local multi-tenant URLs use `<tenant>.guess.local`. The frontend derives the
   tenant from the hostname, calls `http://<tenant>.guess.local:8080/api`, and
   sends `X-Tenant-Id` on every request type. Other deployments use same-origin
-  `/api`. Keep this contract documented in `README.md` and `frontend/README.md`.
+  `/api`. Generated participant links must use the validated matching tenant
+  origin. Keep this contract documented in `README.md` and `frontend/README.md`.
 
 Goose files in `backend/migrations` are schema-only and run in every environment.
 `internal/database/seed/common.sql` contains shared reference data;

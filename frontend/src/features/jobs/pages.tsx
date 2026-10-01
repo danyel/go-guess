@@ -15,7 +15,7 @@ import {
 import { type ReactNode, SyntheticEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '../../api/client'
-import { ErrorAlert, errorMessage, Loading } from '../../components/actions'
+import { copyText, ErrorAlert, errorMessage, Loading } from '../../components/actions'
 import { FormActions, FormField } from '../../components/form'
 import { EmptyState, Fact, Metric, StatusBadge } from '../../components/ui/Display'
 import { NotFound } from '../../components/ui/NotFound'
@@ -522,7 +522,7 @@ function InvitationsView({
 
   async function copy(url: string) {
     try {
-      await navigator.clipboard.writeText(url)
+      await copyText(url)
     } catch {
       setError('Could not copy the participant URL')
     }

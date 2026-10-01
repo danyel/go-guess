@@ -1,4 +1,5 @@
 export { useAuthSession } from './Account'
+export { copyText } from './copyText'
 export { ErrorAlert } from './ErrorAlert'
 export { errorMessage, message } from './errorMessage'
 export { Loading } from './Loading'

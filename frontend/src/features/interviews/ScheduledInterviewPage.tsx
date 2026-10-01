@@ -2,7 +2,7 @@ import { type Dispatch, type FormEvent, type SetStateAction, useEffect, useState
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../../api/client'
 import { useDomainEvent } from '../../app/useDomainEvent'
-import { errorMessage } from '../../components/actions'
+import { copyText, errorMessage } from '../../components/actions'
 import { ErrorAlert, Loading } from '../../components/ui/AsyncState'
 import type { InterviewEvent, InterviewNote, ScheduledInterview } from '../../types'
 import { DateAndPlace } from './components/InterviewCard'
@@ -111,7 +111,7 @@ export function ScheduledInterviewPage() {
     if (!interview) return
     setError('')
     try {
-      await navigator.clipboard.writeText(interview.candidateUrl)
+      await copyText(interview.candidateUrl)
       setLinkCopied(true)
     } catch {
       setError('Could not copy the participant interview link')

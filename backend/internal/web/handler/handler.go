@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -368,7 +369,7 @@ func (h *Handler) ListInvitations(w http.ResponseWriter, r *http.Request) {
 	}
 	response := make([]webmodel.InvitationResponse, len(values))
 	for i, value := range values {
-		response[i] = webmapper.InvitationToWeb(value, h.frontendURL)
+		response[i] = webmapper.InvitationToWeb(value, h.frontendURLForRequest(r))
 	}
 	writeJSON(w, http.StatusOK, response)
 }
@@ -383,7 +384,7 @@ func (h *Handler) CreateInvitation(w http.ResponseWriter, r *http.Request) {
 	if handleServiceError(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusCreated, webmapper.InvitationToWeb(value, h.frontendURL))
+	writeJSON(w, http.StatusCreated, webmapper.InvitationToWeb(value, h.frontendURLForRequest(r)))
 }
 
 func (h *Handler) ReviewInvitation(w http.ResponseWriter, r *http.Request) {
@@ -391,7 +392,7 @@ func (h *Handler) ReviewInvitation(w http.ResponseWriter, r *http.Request) {
 	if handleServiceError(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, webmapper.InvitationReviewToWeb(value, h.frontendURL))
+	writeJSON(w, http.StatusOK, webmapper.InvitationReviewToWeb(value, h.frontendURLForRequest(r)))
 }
 
 func (h *Handler) SetInvitationOutcome(w http.ResponseWriter, r *http.Request) {
@@ -406,7 +407,7 @@ func (h *Handler) SetInvitationOutcome(w http.ResponseWriter, r *http.Request) {
 	if handleServiceError(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, webmapper.InvitationToWeb(value, h.frontendURL))
+	writeJSON(w, http.StatusOK, webmapper.InvitationToWeb(value, h.frontendURLForRequest(r)))
 }
 
 func (h *Handler) CreateScheduledInterview(w http.ResponseWriter, r *http.Request) {
@@ -422,7 +423,7 @@ func (h *Handler) CreateScheduledInterview(w http.ResponseWriter, r *http.Reques
 	if handleServiceError(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusCreated, webmapper.ScheduledInterviewToWeb(value, h.frontendURL))
+	writeJSON(w, http.StatusCreated, webmapper.ScheduledInterviewToWeb(value, h.frontendURLForRequest(r)))
 }
 
 func (h *Handler) ListScheduledInterviews(w http.ResponseWriter, r *http.Request) {
@@ -432,7 +433,7 @@ func (h *Handler) ListScheduledInterviews(w http.ResponseWriter, r *http.Request
 	}
 	response := make([]webmodel.ScheduledInterviewResponse, len(values))
 	for i, value := range values {
-		response[i] = webmapper.ScheduledInterviewToWeb(value, h.frontendURL)
+		response[i] = webmapper.ScheduledInterviewToWeb(value, h.frontendURLForRequest(r))
 	}
 	writeJSON(w, http.StatusOK, response)
 }
@@ -442,7 +443,7 @@ func (h *Handler) GetScheduledInterview(w http.ResponseWriter, r *http.Request) 
 	if handleServiceError(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, webmapper.ScheduledInterviewToWeb(value, h.frontendURL))
+	writeJSON(w, http.StatusOK, webmapper.ScheduledInterviewToWeb(value, h.frontendURLForRequest(r)))
 }
 
 func (h *Handler) UpdateScheduledInterviewStatus(w http.ResponseWriter, r *http.Request) {
@@ -455,7 +456,7 @@ func (h *Handler) UpdateScheduledInterviewStatus(w http.ResponseWriter, r *http.
 	if handleServiceError(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, webmapper.ScheduledInterviewToWeb(value, h.frontendURL))
+	writeJSON(w, http.StatusOK, webmapper.ScheduledInterviewToWeb(value, h.frontendURLForRequest(r)))
 }
 
 func (h *Handler) UpdateScheduledInterviewDocument(w http.ResponseWriter, r *http.Request) {
@@ -470,7 +471,7 @@ func (h *Handler) UpdateScheduledInterviewDocument(w http.ResponseWriter, r *htt
 	if handleServiceError(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, webmapper.ScheduledInterviewToWeb(value, h.frontendURL))
+	writeJSON(w, http.StatusOK, webmapper.ScheduledInterviewToWeb(value, h.frontendURLForRequest(r)))
 }
 
 func (h *Handler) ListInterviewNotes(w http.ResponseWriter, r *http.Request) {
@@ -505,7 +506,7 @@ func (h *Handler) ListInbox(w http.ResponseWriter, r *http.Request) {
 	}
 	response := make([]webmodel.ScheduledInterviewResponse, len(values))
 	for i, value := range values {
-		response[i] = webmapper.ScheduledInterviewToWeb(value, h.frontendURL)
+		response[i] = webmapper.ScheduledInterviewToWeb(value, h.frontendURLForRequest(r))
 	}
 	writeJSON(w, http.StatusOK, response)
 }
@@ -520,7 +521,7 @@ func (h *Handler) UpdateInbox(w http.ResponseWriter, r *http.Request) {
 	if handleServiceError(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, webmapper.ScheduledInterviewToWeb(value, h.frontendURL))
+	writeJSON(w, http.StatusOK, webmapper.ScheduledInterviewToWeb(value, h.frontendURLForRequest(r)))
 }
 
 func (h *Handler) ListCalendar(w http.ResponseWriter, r *http.Request) {
@@ -530,7 +531,7 @@ func (h *Handler) ListCalendar(w http.ResponseWriter, r *http.Request) {
 	}
 	response := make([]webmodel.ScheduledInterviewResponse, len(values))
 	for i, value := range values {
-		response[i] = webmapper.ScheduledInterviewToWeb(value, h.frontendURL)
+		response[i] = webmapper.ScheduledInterviewToWeb(value, h.frontendURLForRequest(r))
 	}
 	writeJSON(w, http.StatusOK, response)
 }
@@ -605,7 +606,7 @@ func (h *Handler) GetInterview(w http.ResponseWriter, r *http.Request) {
 	if handleServiceError(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, webmapper.InterviewToWeb(value, h.frontendURL))
+	writeJSON(w, http.StatusOK, webmapper.InterviewToWeb(value, h.frontendURLForRequest(r)))
 }
 
 func (h *Handler) AcceptInterview(w http.ResponseWriter, r *http.Request) {
@@ -613,7 +614,7 @@ func (h *Handler) AcceptInterview(w http.ResponseWriter, r *http.Request) {
 	if handleServiceError(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, webmapper.InterviewToWeb(value, h.frontendURL))
+	writeJSON(w, http.StatusOK, webmapper.InterviewToWeb(value, h.frontendURLForRequest(r)))
 }
 
 func (h *Handler) SaveAnswer(w http.ResponseWriter, r *http.Request) {
@@ -636,7 +637,23 @@ func (h *Handler) FinishInterview(w http.ResponseWriter, r *http.Request) {
 	if handleServiceError(w, r, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, webmapper.InterviewToWeb(value, h.frontendURL))
+	writeJSON(w, http.StatusOK, webmapper.InterviewToWeb(value, h.frontendURLForRequest(r)))
+}
+
+func (h *Handler) frontendURLForRequest(r *http.Request) string {
+	tenant := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Tenant-Id")))
+	origin := strings.TrimRight(strings.TrimSpace(r.Header.Get("Origin")), "/")
+	if tenant == "" || origin == "" {
+		return h.frontendURL
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return h.frontendURL
+	}
+	if strings.EqualFold(parsed.Hostname(), tenant+".guess.local") {
+		return origin
+	}
+	return h.frontendURL
 }
 
 func readUpload(r *http.Request, field string) ([]byte, string, string, error) {

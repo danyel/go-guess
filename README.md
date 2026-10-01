@@ -30,7 +30,9 @@ Open <http://nmbs.guess.local:5173> or <http://ypto.guess.local:5173>. The
 hostname's first label is the tenant ID: the frontend calls
 `http://<tenant>.guess.local:8080/api` and sends the same value in the
 `X-Tenant-Id` header on JSON, multipart, file-download, and event-stream
-requests. The backend uses that tenant ID as the isolated PostgreSQL schema.
+requests. The backend uses that tenant ID as the isolated PostgreSQL schema and
+builds participant invitation and meeting links from the matching tenant browser
+origin instead of the static localhost fallback.
 
 Sign in with:
 

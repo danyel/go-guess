@@ -41,6 +41,9 @@ tenant `nmbs`, calls `http://nmbs.guess.local:8080/api`, and sends
 `X-Tenant-Id: nmbs` on every JSON, multipart, file-download, and event-stream
 request. `ypto.guess.local` behaves identically for tenant `ypto`. Other
 hostnames use same-origin `/api`; Vite retains its `/api` proxy for that case.
+Invitation and participant-meeting URLs use the validated request origin so
+links stay on the tenant hostname. Copy actions fall back to a temporary selected
+textarea when the Clipboard API is unavailable on local HTTP domains.
 
 Login stores the returned JWT in
 `sessionStorage`; protected requests send it as `Authorization: Bearer <token>`. API failures are
