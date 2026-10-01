@@ -13,10 +13,11 @@ import (
 )
 
 type fakeStore struct {
-	job          model.JobPosting
-	participants []model.Participant
-	traits       []model.Trait
-	createdUser  model.User
+	job                 model.JobPosting
+	participants        []model.Participant
+	traits              []model.Trait
+	createdUser         model.User
+	updatedParticipants []model.Participant
 }
 
 type invitationStore struct {
@@ -130,10 +131,24 @@ func (f *fakeStore) UpdateQuestion(_ context.Context, _ uint, value model.Questi
 func (f *fakeStore) ListParticipants(context.Context) ([]model.Participant, error) {
 	return f.participants, nil
 }
-func (f *fakeStore) GetParticipant(context.Context, uint) (model.Participant, error) {
-	return model.Participant{}, nil
+func (f *fakeStore) GetParticipant(_ context.Context, id uint) (model.Participant, error) {
+	for _, participant := range f.participants {
+		if participant.ID == id {
+			return participant, nil
+		}
+	}
+	return model.Participant{}, repository.ErrNotFound
 }
 func (f *fakeStore) CreateParticipant(_ context.Context, value model.Participant) (model.Participant, error) {
+	return value, nil
+}
+func (f *fakeStore) UpdateParticipant(_ context.Context, value model.Participant) (model.Participant, error) {
+	f.updatedParticipants = append(f.updatedParticipants, value)
+	for index := range f.participants {
+		if f.participants[index].ID == value.ID {
+			f.participants[index] = value
+		}
+	}
 	return value, nil
 }
 func (f *fakeStore) AllTraits(context.Context) ([]model.Trait, error) { return f.traits, nil }
@@ -249,6 +264,75 @@ func TestParticipantCreateExtractsKnownTraits(t *testing.T) {
 	}
 	if value.Email != "ada@example.com" || len(value.Traits) != 2 {
 		t.Fatalf("unexpected participant: %#v", value)
+	}
+}
+
+func TestCreatingJobRefreshesExistingParticipantTraits(t *testing.T) {
+	store := &fakeStore{
+		traits: []model.Trait{{Name: "Go"}, {Name: "Kubernetes"}},
+		participants: []model.Participant{{
+			ID: 7, FirstName: "Ada", LastName: "Lovelace", Email: "ada@example.com",
+			CV: []byte("Platform engineer experienced with Kubernetes."), CVFilename: "cv.txt",
+			Traits: []model.Trait{{Name: "Go"}},
+		}},
+	}
+
+	_, err := NewJobService(store).Create(context.Background(), model.JobPosting{
+		Title: "Platform Engineer", Description: "Operate the platform",
+		Position: "Engineer", Seniority: "Senior",
+		RequiredSkills: []model.Trait{{Name: "Kubernetes"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.updatedParticipants) != 1 ||
+		len(store.updatedParticipants[0].Traits) != 1 ||
+		store.updatedParticipants[0].Traits[0].Name != "Kubernetes" {
+		t.Fatalf("participant traits were not refreshed: %#v", store.updatedParticipants)
+	}
+}
+
+func TestUpdatingJobRefreshesExistingParticipantTraits(t *testing.T) {
+	store := &fakeStore{
+		job:    model.JobPosting{ID: 3, Status: "draft", DurationMinutes: 60},
+		traits: []model.Trait{{Name: "Go"}, {Name: "Kubernetes"}},
+		participants: []model.Participant{{
+			ID: 7, FirstName: "Ada", LastName: "Lovelace", Email: "ada@example.com",
+			CV: []byte("Platform engineer experienced with Kubernetes."), CVFilename: "cv.txt",
+			Traits: []model.Trait{{Name: "Go"}},
+		}},
+	}
+
+	if _, err := NewJobService(store).Update(context.Background(), 3, "draft", 60); err != nil {
+		t.Fatal(err)
+	}
+	if len(store.updatedParticipants) != 1 ||
+		len(store.updatedParticipants[0].Traits) != 1 ||
+		store.updatedParticipants[0].Traits[0].Name != "Kubernetes" {
+		t.Fatalf("participant traits were not refreshed: %#v", store.updatedParticipants)
+	}
+}
+
+func TestParticipantUpdateReplacesCVTraits(t *testing.T) {
+	store := &fakeStore{
+		traits: []model.Trait{{Name: "Go"}, {Name: "React"}},
+		participants: []model.Participant{{
+			ID: 7, FirstName: "Ada", LastName: "Lovelace", Email: "ada@example.com",
+			CV: []byte("Go developer"), CVFilename: "old.txt",
+			Traits: []model.Trait{{Name: "Go"}},
+		}},
+	}
+	participant := store.participants[0]
+	participant.CV = []byte("React developer")
+	participant.CVFilename = "new.txt"
+
+	updated, err := NewParticipantService(store).Update(context.Background(), participant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.updatedParticipants) != 1 || len(updated.Traits) != 1 ||
+		updated.Traits[0].Name != "React" {
+		t.Fatalf("CV traits were not replaced: %#v", updated)
 	}
 }
 

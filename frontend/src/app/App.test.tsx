@@ -62,6 +62,9 @@ function mockApi() {
         })
       if (path === '/api/jobs') return response([job])
       if (path === '/api/participants') return response([participant])
+      if (path === '/api/participants/3' && method === 'GET') return response(participant)
+      if (path === '/api/participants/3/cv' && method === 'PUT')
+        return response({ ...participant, cvFilename: 'replacement.pdf', traits: ['React'] })
       if (path === '/api/jobs/7') return response(job)
       if (path === '/api/jobs/7/candidates')
         return response([
@@ -318,6 +321,21 @@ describe('Go Guess frontend', () => {
     expect(screen.getByLabelText(/birthday/i)).toHaveAttribute('type', 'date')
     expect(screen.getByLabelText(/contact information/i)).toBeRequired()
     expect(screen.getByLabelText(/upload cv/i)).toHaveAttribute('accept', '.pdf,.doc,.docx')
+  })
+
+  it('replaces a participant CV and displays recalculated traits', async () => {
+    authenticate()
+    const user = userEvent.setup()
+    renderApp('/participants/3')
+
+    const input = await screen.findByLabelText(/replace cv/i)
+    await user.upload(input, new File(['replacement'], 'replacement.pdf', { type: 'application/pdf' }))
+
+    expect(await screen.findByText('React')).toBeInTheDocument()
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/participants/3/cv',
+      expect.objectContaining({ method: 'PUT' }),
+    )
   })
 
   it('creates and deprecates questions in the standalone library', async () => {

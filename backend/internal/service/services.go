@@ -51,6 +51,8 @@ type IParticipantService interface {
 	List(context.Context) ([]model.Participant, error)
 	Get(context.Context, uint) (model.Participant, error)
 	Create(context.Context, model.Participant) (model.Participant, error)
+	Update(context.Context, model.Participant) (model.Participant, error)
+	UpdateTraits(context.Context, uint) error
 }
 
 type IInvitationService interface {
@@ -117,7 +119,14 @@ func (s *JobService) Create(ctx context.Context, value model.JobPosting) (model.
 	if value.DurationMinutes < 1 || value.DurationMinutes > 480 {
 		return model.JobPosting{}, fmt.Errorf("%w: duration must be between 1 and 480 minutes", ErrValidation)
 	}
-	return s.store.CreateJob(ctx, value)
+	created, err := s.store.CreateJob(ctx, value)
+	if err != nil {
+		return model.JobPosting{}, err
+	}
+	if err := refreshParticipantTraits(ctx, s.store); err != nil {
+		return model.JobPosting{}, fmt.Errorf("refresh participant traits: %w", err)
+	}
+	return created, nil
 }
 
 func (s *JobService) Update(ctx context.Context, id uint, status string, durationMinutes int) (model.JobPosting, error) {
@@ -136,7 +145,14 @@ func (s *JobService) Update(ctx context.Context, id uint, status string, duratio
 			return model.JobPosting{}, fmt.Errorf("%w: a published job requires at least one question", ErrInvalidState)
 		}
 	}
-	return s.store.UpdateJob(ctx, id, status, durationMinutes)
+	updated, err := s.store.UpdateJob(ctx, id, status, durationMinutes)
+	if err != nil {
+		return model.JobPosting{}, err
+	}
+	if err := refreshParticipantTraits(ctx, s.store); err != nil {
+		return model.JobPosting{}, fmt.Errorf("refresh participant traits: %w", err)
+	}
+	return updated, nil
 }
 
 func (s *JobService) AttachQuestion(ctx context.Context, jobID, questionID uint) error {
@@ -305,6 +321,56 @@ func (s *ParticipantService) Create(ctx context.Context, value model.Participant
 	}
 	value.Traits = extractTraits(text, allTraits)
 	return s.store.CreateParticipant(ctx, value)
+}
+
+func (s *ParticipantService) Update(ctx context.Context, value model.Participant) (model.Participant, error) {
+	value.FirstName = strings.TrimSpace(value.FirstName)
+	value.LastName = strings.TrimSpace(value.LastName)
+	value.Email = strings.ToLower(strings.TrimSpace(value.Email))
+	if value.FirstName == "" || value.LastName == "" || value.Email == "" {
+		return model.Participant{}, fmt.Errorf("%w: first name, last name, and email are required", ErrValidation)
+	}
+	allTraits, err := s.store.AllTraits(ctx)
+	if err != nil {
+		return model.Participant{}, err
+	}
+	text, err := extractCVText(value.CVFilename, value.CV)
+	if err != nil {
+		return model.Participant{}, fmt.Errorf("%w: extract CV text: %v", ErrValidation, err)
+	}
+	value.Traits = extractTraits(text, allTraits)
+	return s.store.UpdateParticipant(ctx, value)
+}
+
+func (s *ParticipantService) UpdateTraits(ctx context.Context, id uint) error {
+	participant, err := s.store.GetParticipant(ctx, id)
+	if err != nil {
+		return err
+	}
+	_, err = s.Update(ctx, participant)
+	return err
+}
+
+func refreshParticipantTraits(ctx context.Context, store repository.IStore) error {
+	participants, err := store.ListParticipants(ctx)
+	if err != nil {
+		return err
+	}
+	traits, err := store.AllTraits(ctx)
+	if err != nil {
+		return err
+	}
+	for _, participant := range participants {
+		text, err := extractCVText(participant.CVFilename, participant.CV)
+		if err != nil {
+			return fmt.Errorf("extract participant %d CV text: %w", participant.ID, err)
+		}
+		participant.Traits = extractTraits(text, traits)
+		if _, err := store.UpdateParticipant(ctx, participant); err != nil {
+			return fmt.Errorf("update participant %d traits: %w", participant.ID, err)
+		}
+	}
+	return nil
 }
 
 func extractTraits(content string, traits []model.Trait) []model.Trait {

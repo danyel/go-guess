@@ -47,6 +47,10 @@ func (participantStub) Get(context.Context, uint) (model.Participant, error) {
 func (participantStub) Create(context.Context, model.Participant) (model.Participant, error) {
 	return model.Participant{}, nil
 }
+func (participantStub) Update(context.Context, model.Participant) (model.Participant, error) {
+	return model.Participant{}, nil
+}
+func (participantStub) UpdateTraits(context.Context, uint) error { return nil }
 
 type questionStub struct{}
 

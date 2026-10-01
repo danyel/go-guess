@@ -164,8 +164,21 @@ export function JobDetailPage() {
 
   useDomainEvent<Job | Invitation | ScheduledInterview | undefined>(`jobs/${id}`, (event) => {
     const data = event.data
+    if (event.type === 'participant.cv-updated') {
+      void api.jobs
+        .candidates(id)
+        .then(setMatches)
+        .catch((value) => setError(errorMessage(value)))
+      return
+    }
     if (isJob(data)) {
       setJob(data)
+      if (event.type === 'job.updated') {
+        void api.jobs
+          .candidates(id)
+          .then(setMatches)
+          .catch((value) => setError(errorMessage(value)))
+      }
       return
     }
     if (isInvitation(data)) {

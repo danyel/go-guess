@@ -297,6 +297,34 @@ func (h *Handler) CreateParticipant(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, webmapper.ParticipantToWeb(value))
 }
 
+func (h *Handler) UpdateParticipantCV(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, h.maxUpload)
+	if err := r.ParseMultipartForm(h.maxUpload); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid multipart form or upload too large"))
+		return
+	}
+	cv, _, filename, err := readUpload(r, "cv")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if len(cv) == 0 {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("cv is required"))
+		return
+	}
+	participant, err := h.participants.Get(r.Context(), idParam(r))
+	if handleServiceError(w, r, err) {
+		return
+	}
+	participant.CV = cv
+	participant.CVFilename = filename
+	value, err := h.participants.Update(r.Context(), participant)
+	if handleServiceError(w, r, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, webmapper.ParticipantToWeb(value))
+}
+
 func (h *Handler) ParticipantPhoto(w http.ResponseWriter, r *http.Request) {
 	value, err := h.participants.Get(r.Context(), idParam(r))
 	if handleServiceError(w, r, err) {

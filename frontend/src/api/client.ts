@@ -369,6 +369,15 @@ export const api = {
         (participant) => ['participants', `participants/${participant.id}`],
       )
     },
+    updateCV: (id: number, cv: File) => {
+      const form = new FormData()
+      form.append('cv', cv)
+      return mutation(
+        request<Participant>(`/participants/${id}/cv`, { method: 'PUT', body: form }),
+        'participant.cv-updated',
+        (participant) => ['participants', `participants/${participant.id}`, 'jobs'],
+      )
+    },
   },
   users: {
     list: () => request<User[]>('/users'),

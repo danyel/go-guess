@@ -84,6 +84,53 @@ describe('API client', () => {
     expect([...form.keys()]).toEqual(['firstName', 'lastName', 'birthday', 'email', 'contactInfo'])
   })
 
+  it('uploads a replacement CV and publishes participant and job events', async () => {
+    authStorage.save({
+      token: 'signed-jwt',
+      user: { id: 1, email: 'admin@example.com', displayName: 'Admin', role: 'admin' },
+    })
+    const participant = {
+      id: 4,
+      firstName: 'A',
+      lastName: 'B',
+      email: 'a@example.com',
+      contactInfo: 'Brussels',
+      traits: ['React'],
+      cvFilename: 'replacement.pdf',
+      createdAt: '2026-09-01T00:00:00Z',
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(participant), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const participantListener = vi.fn()
+    const jobsListener = vi.fn()
+    const unsubscribeParticipant = subscribeToDomainEvent('participants/4', participantListener)
+    const unsubscribeJobs = subscribeToDomainEvent('jobs', jobsListener)
+    const cv = new File(['replacement'], 'replacement.pdf', { type: 'application/pdf' })
+
+    await api.participants.updateCV(4, cv)
+
+    const options = fetchMock.mock.calls[0][1] as RequestInit
+    const form = options.body as FormData
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/participants/4/cv',
+      expect.objectContaining({ method: 'PUT' }),
+    )
+    expect(form.get('cv')).toBe(cv)
+    expect(participantListener).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'participant.cv-updated', data: participant }),
+    )
+    expect(jobsListener).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'participant.cv-updated', data: participant }),
+    )
+    unsubscribeParticipant()
+    unsubscribeJobs()
+  })
+
   it('publishes an entity event after a successful mutation', async () => {
     const job = {
       id: 7,

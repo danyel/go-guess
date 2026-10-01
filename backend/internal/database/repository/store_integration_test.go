@@ -73,3 +73,37 @@ func TestStorePersistsJobWithTraits(t *testing.T) {
 		t.Fatalf("unexpected stored job: %#v", found)
 	}
 }
+
+func TestStoreUpdatesParticipantAndReplacesTraits(t *testing.T) {
+	databaseURL := os.Getenv("TEST_DATABASE_URL")
+	if databaseURL == "" {
+		t.Skip("TEST_DATABASE_URL is not set")
+	}
+	db, err := gorm.Open(postgres.Open(databaseURL), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := New(db)
+	suffix := uuid.NewString()
+	created, err := store.CreateParticipant(context.Background(), model.Participant{
+		FirstName: "Ada", LastName: "Lovelace", Email: "candidate-" + suffix + "@example.com",
+		CV: []byte("Go developer"), CVFilename: "old.txt",
+		Traits: []model.Trait{{Name: "Go"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Exec("DELETE FROM participants WHERE id = ?", created.ID) })
+
+	created.CV = []byte("React developer")
+	created.CVFilename = "new.txt"
+	created.Traits = []model.Trait{{Name: "React"}}
+	updated, err := store.UpdateParticipant(context.Background(), created)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ID != created.ID || updated.CVFilename != "new.txt" ||
+		len(updated.Traits) != 1 || updated.Traits[0].Name != "React" {
+		t.Fatalf("unexpected updated participant: %#v", updated)
+	}
+}

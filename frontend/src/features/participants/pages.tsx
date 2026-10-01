@@ -205,6 +205,7 @@ export function ParticipantDetailPage() {
   const id = Number(useParams().participantId)
   const [person, setPerson] = useState<Participant>()
   const [error, setError] = useState('')
+  const [uploadingCV, setUploadingCV] = useState(false)
   useEffect(() => {
     void api.participants
       .get(id)
@@ -226,6 +227,19 @@ export function ParticipantDetailPage() {
       URL.revokeObjectURL(url)
     } catch (requestError) {
       setError(errorMessage(requestError))
+    }
+  }
+
+  async function replaceCV(file?: File) {
+    if (!file) return
+    setUploadingCV(true)
+    setError('')
+    try {
+      setPerson(await api.participants.updateCV(id, file))
+    } catch (requestError) {
+      setError(errorMessage(requestError))
+    } finally {
+      setUploadingCV(false)
     }
   }
 
@@ -272,6 +286,15 @@ export function ParticipantDetailPage() {
               </span>
             </button>
           )}
+          <label className="button secondary file-button">
+            <Upload size={17} /> {uploadingCV ? 'Updating CV…' : 'Replace CV'}
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx"
+              disabled={uploadingCV}
+              onChange={(event) => void replaceCV(event.target.files?.[0])}
+            />
+          </label>
         </aside>
       </div>
     </>

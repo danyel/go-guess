@@ -40,6 +40,7 @@ type IStore interface {
 	ListParticipants(context.Context) ([]servicemodel.Participant, error)
 	GetParticipant(context.Context, uint) (servicemodel.Participant, error)
 	CreateParticipant(context.Context, servicemodel.Participant) (servicemodel.Participant, error)
+	UpdateParticipant(context.Context, servicemodel.Participant) (servicemodel.Participant, error)
 	AllTraits(context.Context) ([]servicemodel.Trait, error)
 	ListInvitations(context.Context, uint) ([]servicemodel.Invitation, error)
 	CreateInvitation(context.Context, servicemodel.Invitation) (servicemodel.Invitation, error)
@@ -324,6 +325,38 @@ func (s *Store) CreateParticipant(ctx context.Context, value servicemodel.Partic
 	}
 	if err := s.db(ctx).Create(&entity).Error; err != nil {
 		return servicemodel.Participant{}, mapError(err)
+	}
+	return s.GetParticipant(ctx, entity.ID)
+}
+
+func (s *Store) UpdateParticipant(ctx context.Context, value servicemodel.Participant) (servicemodel.Participant, error) {
+	entity := dbmodel.Participant{
+		ID:        value.ID,
+		FirstName: value.FirstName, LastName: value.LastName, Birthday: value.Birthday,
+		Email: value.Email, ContactInfo: value.ContactInfo, Photo: value.Photo,
+		PhotoType: value.PhotoType, CV: value.CV, CVFilename: value.CVFilename,
+	}
+	db := s.db(ctx)
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		traits, err := resolveTraits(tx, value.Traits)
+		if err != nil {
+			return err
+		}
+		entity.Traits = traits
+		result := tx.Model(&dbmodel.Participant{}).Where("id = ?", value.ID).Updates(map[string]any{
+			"first_name": value.FirstName, "last_name": value.LastName, "birthday": value.Birthday,
+			"email": value.Email, "contact_info": value.ContactInfo, "photo": value.Photo,
+			"photo_type": value.PhotoType, "cv": value.CV, "cv_filename": value.CVFilename,
+		})
+		if result.Error != nil {
+			return mapError(result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return ErrNotFound
+		}
+		return tx.Model(&entity).Association("Traits").Replace(entity.Traits)
+	}); err != nil {
+		return servicemodel.Participant{}, err
 	}
 	return s.GetParticipant(ctx, entity.ID)
 }
@@ -621,6 +654,10 @@ func (s *Store) ListCalendar(ctx context.Context, userID uint) ([]servicemodel.S
 }
 
 func (s *Store) resolveTraits(ctx context.Context, values []servicemodel.Trait) ([]dbmodel.Trait, error) {
+	return resolveTraits(s.db(ctx), values)
+}
+
+func resolveTraits(db *gorm.DB, values []servicemodel.Trait) ([]dbmodel.Trait, error) {
 	result := make([]dbmodel.Trait, 0, len(values))
 	seen := make(map[string]struct{}, len(values))
 	for _, value := range values {
@@ -634,7 +671,7 @@ func (s *Store) resolveTraits(ctx context.Context, values []servicemodel.Trait) 
 		}
 		seen[normalized] = struct{}{}
 		var trait dbmodel.Trait
-		if err := s.db(ctx).Where(dbmodel.Trait{Normalized: normalized}).
+		if err := db.Where(dbmodel.Trait{Normalized: normalized}).
 			Attrs(dbmodel.Trait{Name: name}).FirstOrCreate(&trait).Error; err != nil {
 			return nil, err
 		}
