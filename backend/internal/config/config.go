@@ -28,7 +28,7 @@ func Load() (Config, error) {
 	}
 	cfg := Config{
 		Address:     env("ADDRESS", ":8080"),
-		DatabaseURL: env("DATABASE_URL", "postgres://go_guess:go_guess@localhost:5432/go_guess?sslmode=disable"),
+		DatabaseURL: env("DATABASE_URL", "postgres://go_guess:go_guess@localhost:5432/?sslmode=disable"),
 		JWTSecret:   os.Getenv("JWT_SECRET"),
 		TokenTTL:    ttl,
 		MaxUploadMB: maxUploadMB,

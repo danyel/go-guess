@@ -48,13 +48,13 @@ db-down:
 	docker compose down
 
 migrate:
-	$(GOOSE) -dir migrations postgres "$(DATABASE_URL)" up
+	$(GOOSE) -dir migrations postgres "host=localhost user=go_guess password=go_guess dbname=go_guess port=5432 sslmode=disable search_path=ypto" up
 
 migrate-down:
-	$(GOOSE) -dir migrations postgres "$(DATABASE_URL)" down
+	$(GOOSE) -dir migrations postgres "host=localhost user=go_guess password=go_guess dbname=go_guess port=5432 sslmode=disable search_path=ypto" down
 
 seed:
-	cd backend && DATABASE_URL="$(DATABASE_URL)" APP_ENV="$${APP_ENV:-development}" go run ./cmd/seed
+	cd backend && DATABASE_URL="$(DATABASE_URL)&search_path=nmbs,public" APP_ENV="$${APP_ENV:-development}" go run ./cmd/seed
 
 backend:
 	cd backend && DATABASE_URL="$(DATABASE_URL)" JWT_SECRET="$(JWT_SECRET)" go run ./cmd/api

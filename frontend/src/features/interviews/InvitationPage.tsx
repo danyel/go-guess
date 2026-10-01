@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../../api/client'
+import {api} from '../../api/client'
 import { useDomainEvent } from '../../app/useDomainEvent'
 import { errorMessage } from '../../components/actions'
 import { ErrorAlert, Loading } from '../../components/ui/AsyncState'

@@ -50,6 +50,7 @@ func main() {
 	interviews := service.NewScheduledInterviewService(store, bus)
 	api := router.New(
 		handler.New(
+			db,
 			service.NewAuthService(store, tokens),
 			service.NewJobService(store),
 			service.NewQuestionService(store),

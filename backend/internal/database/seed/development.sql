@@ -1,12 +1,12 @@
 INSERT INTO users (email, password_hash, display_name, role)
-VALUES ('interviewer@go-guess.local', crypt('admin123', gen_salt('bf')), 'Lead Interviewer', 'interviewer')
+VALUES ('interviewer@nmbs.local', crypt('admin123', gen_salt('bf')), 'Lead Interviewer', 'interviewer')
 ON CONFLICT (email) DO UPDATE SET
     password_hash = EXCLUDED.password_hash,
     display_name = EXCLUDED.display_name,
     role = EXCLUDED.role;
 
 INSERT INTO users (email, password_hash, display_name, role)
-VALUES ('co-interviewer@go-guess.local', crypt('admin123', gen_salt('bf')), 'Co-Interviewer', 'interviewer')
+VALUES ('co-interviewer@nmbs.local', crypt('admin123', gen_salt('bf')), 'Co-Interviewer', 'interviewer')
 ON CONFLICT (email) DO UPDATE SET
     password_hash = EXCLUDED.password_hash,
     display_name = EXCLUDED.display_name,

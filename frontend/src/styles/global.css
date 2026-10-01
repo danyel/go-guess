@@ -498,7 +498,7 @@ button {
 .main-content {
   margin-left: 255px;
   padding: clamp(1rem, 2vw, 1.8rem) clamp(1.2rem, 4vw, 4.8rem) 0;
-  max-width: 1550px;
+  /*max-width: 1550px;*/
   min-height: 100vh;
   display: flex;
   flex-direction: column;

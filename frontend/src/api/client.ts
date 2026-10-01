@@ -19,6 +19,9 @@ import type {
 } from '../types'
 import { publishDomainEvent } from './domainEvents'
 
+let activeTenant: string | null = null;
+
+
 const TOKEN_KEY = 'go-guess-token'
 const USER_KEY = 'go-guess-user'
 export const SESSION_EXPIRED_EVENT = 'go-guess:session-expired'
@@ -71,6 +74,12 @@ async function request<T>(
   options: RequestInit = {},
   protectedRequest = true,
 ): Promise<T> {
+  let activeTenant: string | undefined
+  const hostname = window.location.hostname;
+  const parts = hostname.split('.');
+  if (parts.length > 1) {
+     activeTenant = parts[0];
+  }
   const token = authStorage.token()
   const response = await fetch(`/api${path}`, {
     ...options,
@@ -78,6 +87,7 @@ async function request<T>(
       Accept: 'application/json',
       ...(options.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...(protectedRequest && token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(activeTenant ? { 'X-Tenant-Id': activeTenant } : {}),
       ...options.headers,
     },
   })
@@ -106,9 +116,16 @@ async function request<T>(
 
 async function requestBlob(path: string): Promise<Blob> {
   const token = authStorage.token()
+  let activeTenant: string | undefined
+  const hostname = window.location.hostname;
+  const parts = hostname.split('.');
+  if (parts.length > 1) {
+    activeTenant = parts[0];
+  }
   const response = await fetch(`/api${path}`, {
     headers: {
       Accept: '*/*',
+      ...(activeTenant ? { 'X-Tenant-Id': activeTenant } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
   })
@@ -181,12 +198,16 @@ async function subscribeToInterviewEvents(
     }
   }
 }
-
+function getLiveTenant(): string | null {
+  const hostname = window.location.hostname;
+  const parts = hostname.split('.');
+  return parts.length > 1 ? parts[0] : null;
+}
 export const api = {
   login: (email: string, password: string) =>
     request<AuthResponse>(
       '/auth/login',
-      { method: 'POST', body: JSON.stringify({ email, password }) },
+      { method: 'POST', body: JSON.stringify({ email, password }), headers: {'X-Tenant-Id': getLiveTenant()!!} },
       false,
     ),
   jobs: {

@@ -9,7 +9,9 @@ import (
 	dbmodel "github.com/danyel/go-guess/backend/internal/database/entity"
 	dbmapper "github.com/danyel/go-guess/backend/internal/database/mapper"
 	servicemodel "github.com/danyel/go-guess/backend/internal/service/model"
+	"github.com/danyel/go-guess/backend/internal/web/middleware"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/testcontainers/testcontainers-go/log"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -61,16 +63,27 @@ type IStore interface {
 }
 
 type Store struct {
-	db *gorm.DB
+	d *gorm.DB
 }
 
 func New(db *gorm.DB) *Store {
-	return &Store{db: db}
+	return &Store{d: db}
+}
+
+func (s *Store) db(ctx context.Context) *gorm.DB {
+	// Vervang 'yourproject/middleware' door het echte importpad naar je middleware
+	if tx, ok := ctx.Value(middleware.TxKey).(*gorm.DB); ok {
+		log.Printf("Using tenant-isolated database schema transaction")
+		return tx.WithContext(ctx)
+	}
+
+	log.Printf("WARNING: Falling back to global public database connection!")
+	return s.d.WithContext(ctx)
 }
 
 func (s *Store) FindUserByEmail(ctx context.Context, email string) (servicemodel.User, error) {
 	var value dbmodel.User
-	if err := s.db.WithContext(ctx).Where("lower(email) = ?", strings.ToLower(email)).First(&value).Error; err != nil {
+	if err := s.db(ctx).Where("lower(email) = ?", strings.ToLower(email)).First(&value).Error; err != nil {
 		return servicemodel.User{}, mapError(err)
 	}
 	return dbmapper.UserToService(value), nil
@@ -78,7 +91,7 @@ func (s *Store) FindUserByEmail(ctx context.Context, email string) (servicemodel
 
 func (s *Store) ListUsers(ctx context.Context) ([]servicemodel.User, error) {
 	var values []dbmodel.User
-	if err := s.db.WithContext(ctx).Order("display_name, email").Find(&values).Error; err != nil {
+	if err := s.db(ctx).Order("display_name, email").Find(&values).Error; err != nil {
 		return nil, err
 	}
 	result := make([]servicemodel.User, len(values))
@@ -94,7 +107,7 @@ func (s *Store) CreateUser(ctx context.Context, value servicemodel.User) (servic
 		Email: value.Email, PasswordHash: value.PasswordHash,
 		DisplayName: value.DisplayName, Role: value.Role,
 	}
-	if err := s.db.WithContext(ctx).Create(&entity).Error; err != nil {
+	if err := s.db(ctx).Create(&entity).Error; err != nil {
 		return servicemodel.User{}, mapError(err)
 	}
 	result := dbmapper.UserToService(entity)
@@ -104,7 +117,7 @@ func (s *Store) CreateUser(ctx context.Context, value servicemodel.User) (servic
 
 func (s *Store) ListJobs(ctx context.Context) ([]servicemodel.JobPosting, error) {
 	var values []dbmodel.JobPosting
-	if err := preloadJob(s.db.WithContext(ctx)).Order("created_at DESC").Find(&values).Error; err != nil {
+	if err := preloadJob(s.db(ctx)).Order("created_at DESC").Find(&values).Error; err != nil {
 		return nil, err
 	}
 	result := make([]servicemodel.JobPosting, len(values))
@@ -116,7 +129,7 @@ func (s *Store) ListJobs(ctx context.Context) ([]servicemodel.JobPosting, error)
 
 func (s *Store) GetJob(ctx context.Context, id uint) (servicemodel.JobPosting, error) {
 	var value dbmodel.JobPosting
-	if err := preloadJob(s.db.WithContext(ctx)).First(&value, id).Error; err != nil {
+	if err := preloadJob(s.db(ctx)).First(&value, id).Error; err != nil {
 		return servicemodel.JobPosting{}, mapError(err)
 	}
 	return dbmapper.JobToService(value), nil
@@ -140,14 +153,14 @@ func (s *Store) CreateJob(ctx context.Context, value servicemodel.JobPosting) (s
 	if err != nil {
 		return servicemodel.JobPosting{}, err
 	}
-	if err := s.db.WithContext(ctx).Create(&entity).Error; err != nil {
+	if err := s.db(ctx).Create(&entity).Error; err != nil {
 		return servicemodel.JobPosting{}, mapError(err)
 	}
 	return s.GetJob(ctx, entity.ID)
 }
 
 func (s *Store) UpdateJob(ctx context.Context, id uint, status string, durationMinutes int) (servicemodel.JobPosting, error) {
-	result := s.db.WithContext(ctx).Model(&dbmodel.JobPosting{}).Where("id = ?", id).
+	result := s.db(ctx).Model(&dbmodel.JobPosting{}).Where("id = ?", id).
 		Updates(map[string]any{"status": status, "duration_minutes": durationMinutes})
 	if result.Error != nil {
 		return servicemodel.JobPosting{}, result.Error
@@ -159,7 +172,7 @@ func (s *Store) UpdateJob(ctx context.Context, id uint, status string, durationM
 }
 
 func (s *Store) ListQuestions(ctx context.Context, search string) ([]servicemodel.Question, error) {
-	query := s.db.WithContext(ctx).Preload("Options").Order("deprecated, created_at DESC")
+	query := s.db(ctx).Preload("Options").Order("deprecated, created_at DESC")
 	if search = strings.TrimSpace(search); search != "" {
 		query = query.Where("text ILIKE ?", "%"+search+"%")
 	}
@@ -176,7 +189,7 @@ func (s *Store) ListQuestions(ctx context.Context, search string) ([]servicemode
 
 func (s *Store) GetQuestion(ctx context.Context, id uint) (servicemodel.Question, error) {
 	var value dbmodel.Question
-	if err := s.db.WithContext(ctx).Preload("Options").First(&value, id).Error; err != nil {
+	if err := s.db(ctx).Preload("Options").First(&value, id).Error; err != nil {
 		return servicemodel.Question{}, mapError(err)
 	}
 	return dbmapper.QuestionToService(value), nil
@@ -192,14 +205,14 @@ func (s *Store) CreateQuestion(ctx context.Context, value servicemodel.Question)
 		CodeSnippet: value.CodeSnippet, ReferenceAnswer: value.ReferenceAnswer,
 		Deprecated: value.Deprecated,
 	}
-	if err := s.db.WithContext(ctx).Create(&entity).Error; err != nil {
+	if err := s.db(ctx).Create(&entity).Error; err != nil {
 		return servicemodel.Question{}, mapError(err)
 	}
 	return s.GetQuestion(ctx, entity.ID)
 }
 
 func (s *Store) UpdateQuestion(ctx context.Context, id uint, value servicemodel.Question) (servicemodel.Question, error) {
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.db(ctx).Transaction(func(tx *gorm.DB) error {
 		result := tx.Model(&dbmodel.Question{}).Where("id = ?", id).
 			Updates(map[string]any{
 				"text": value.Text, "type": value.Type, "code_snippet": value.CodeSnippet,
@@ -230,7 +243,7 @@ func (s *Store) UpdateQuestion(ctx context.Context, id uint, value servicemodel.
 }
 
 func (s *Store) SetQuestionDeprecated(ctx context.Context, id uint, deprecated bool) (servicemodel.Question, error) {
-	result := s.db.WithContext(ctx).Model(&dbmodel.Question{}).Where("id = ?", id).
+	result := s.db(ctx).Model(&dbmodel.Question{}).Where("id = ?", id).
 		Update("deprecated", deprecated)
 	if result.Error != nil {
 		return servicemodel.Question{}, result.Error
@@ -243,44 +256,44 @@ func (s *Store) SetQuestionDeprecated(ctx context.Context, id uint, deprecated b
 
 func (s *Store) AttachQuestion(ctx context.Context, jobID, questionID uint) error {
 	var job dbmodel.JobPosting
-	if err := s.db.WithContext(ctx).First(&job, jobID).Error; err != nil {
+	if err := s.db(ctx).First(&job, jobID).Error; err != nil {
 		return mapError(err)
 	}
 	var question dbmodel.Question
-	if err := s.db.WithContext(ctx).First(&question, questionID).Error; err != nil {
+	if err := s.db(ctx).First(&question, questionID).Error; err != nil {
 		return mapError(err)
 	}
 	var invitations int64
-	if err := s.db.WithContext(ctx).Model(&dbmodel.Invitation{}).Where("job_id = ?", jobID).
+	if err := s.db(ctx).Model(&dbmodel.Invitation{}).Where("job_id = ?", jobID).
 		Count(&invitations).Error; err != nil {
 		return err
 	}
 	if invitations > 0 {
 		return ErrConflict
 	}
-	return mapError(s.db.WithContext(ctx).Model(&job).Association("Questions").Append(&question))
+	return mapError(s.db(ctx).Model(&job).Association("Questions").Append(&question))
 }
 
 func (s *Store) DetachQuestion(ctx context.Context, jobID, questionID uint) error {
 	var job dbmodel.JobPosting
-	if err := s.db.WithContext(ctx).First(&job, jobID).Error; err != nil {
+	if err := s.db(ctx).First(&job, jobID).Error; err != nil {
 		return mapError(err)
 	}
 	var invitations int64
-	if err := s.db.WithContext(ctx).Model(&dbmodel.Invitation{}).Where("job_id = ?", jobID).
+	if err := s.db(ctx).Model(&dbmodel.Invitation{}).Where("job_id = ?", jobID).
 		Count(&invitations).Error; err != nil {
 		return err
 	}
 	if invitations > 0 {
 		return ErrConflict
 	}
-	return s.db.WithContext(ctx).Model(&job).Association("Questions").
+	return s.db(ctx).Model(&job).Association("Questions").
 		Delete(&dbmodel.Question{ID: questionID})
 }
 
 func (s *Store) ListParticipants(ctx context.Context) ([]servicemodel.Participant, error) {
 	var values []dbmodel.Participant
-	if err := s.db.WithContext(ctx).Preload("Traits").Order("last_name, first_name").Find(&values).Error; err != nil {
+	if err := s.db(ctx).Preload("Traits").Order("last_name, first_name").Find(&values).Error; err != nil {
 		return nil, err
 	}
 	result := make([]servicemodel.Participant, len(values))
@@ -292,7 +305,7 @@ func (s *Store) ListParticipants(ctx context.Context) ([]servicemodel.Participan
 
 func (s *Store) GetParticipant(ctx context.Context, id uint) (servicemodel.Participant, error) {
 	var value dbmodel.Participant
-	if err := s.db.WithContext(ctx).Preload("Traits").First(&value, id).Error; err != nil {
+	if err := s.db(ctx).Preload("Traits").First(&value, id).Error; err != nil {
 		return servicemodel.Participant{}, mapError(err)
 	}
 	return dbmapper.ParticipantToService(value), nil
@@ -309,7 +322,7 @@ func (s *Store) CreateParticipant(ctx context.Context, value servicemodel.Partic
 	if err != nil {
 		return servicemodel.Participant{}, err
 	}
-	if err := s.db.WithContext(ctx).Create(&entity).Error; err != nil {
+	if err := s.db(ctx).Create(&entity).Error; err != nil {
 		return servicemodel.Participant{}, mapError(err)
 	}
 	return s.GetParticipant(ctx, entity.ID)
@@ -317,7 +330,7 @@ func (s *Store) CreateParticipant(ctx context.Context, value servicemodel.Partic
 
 func (s *Store) AllTraits(ctx context.Context) ([]servicemodel.Trait, error) {
 	var values []dbmodel.Trait
-	if err := s.db.WithContext(ctx).Order("name").Find(&values).Error; err != nil {
+	if err := s.db(ctx).Order("name").Find(&values).Error; err != nil {
 		return nil, err
 	}
 	result := make([]servicemodel.Trait, len(values))
@@ -329,7 +342,7 @@ func (s *Store) AllTraits(ctx context.Context) ([]servicemodel.Trait, error) {
 
 func (s *Store) ListInvitations(ctx context.Context, jobID uint) ([]servicemodel.Invitation, error) {
 	var values []dbmodel.Invitation
-	if err := s.db.WithContext(ctx).Preload("Participant").Where("job_id = ?", jobID).
+	if err := s.db(ctx).Preload("Participant").Where("job_id = ?", jobID).
 		Order("created_at DESC").Find(&values).Error; err != nil {
 		return nil, err
 	}
@@ -345,11 +358,11 @@ func (s *Store) CreateInvitation(ctx context.Context, value servicemodel.Invitat
 		JobID: value.JobID, ParticipantID: value.ParticipantID,
 		Token: value.Token, Status: value.Status, DurationMinutes: value.DurationMinutes,
 	}
-	if err := s.db.WithContext(ctx).Create(&entity).Error; err != nil {
+	if err := s.db(ctx).Create(&entity).Error; err != nil {
 		return servicemodel.Invitation{}, mapError(err)
 	}
 	var created dbmodel.Invitation
-	if err := s.db.WithContext(ctx).Preload("Participant").First(&created, entity.ID).Error; err != nil {
+	if err := s.db(ctx).Preload("Participant").First(&created, entity.ID).Error; err != nil {
 		return servicemodel.Invitation{}, mapError(err)
 	}
 	return dbmapper.InvitationToService(created), nil
@@ -357,7 +370,7 @@ func (s *Store) CreateInvitation(ctx context.Context, value servicemodel.Invitat
 
 func (s *Store) GetInterview(ctx context.Context, token string) (servicemodel.Interview, error) {
 	var invitation dbmodel.Invitation
-	err := s.db.WithContext(ctx).Preload("Participant").Preload("Answers").
+	err := s.db(ctx).Preload("Participant").Preload("Answers").
 		Preload("Job.Labels").Preload("Job.RequiredSkills").Preload("Job.AdditionalSkills").
 		Preload("Job.Questions.Options").Where("token = ?", token).First(&invitation).Error
 	if err != nil {
@@ -375,7 +388,7 @@ func (s *Store) GetInterview(ctx context.Context, token string) (servicemodel.In
 }
 
 func (s *Store) AcceptInvitation(ctx context.Context, token string, acceptedAt time.Time) error {
-	result := s.db.WithContext(ctx).Model(&dbmodel.Invitation{}).
+	result := s.db(ctx).Model(&dbmodel.Invitation{}).
 		Where("token = ? AND status = ?", token, "pending").
 		Updates(map[string]any{"status": "accepted", "accepted_at": acceptedAt})
 	if result.Error != nil {
@@ -389,18 +402,18 @@ func (s *Store) AcceptInvitation(ctx context.Context, token string, acceptedAt t
 
 func (s *Store) SaveAnswer(ctx context.Context, token string, questionID uint, answer string) error {
 	var invitation dbmodel.Invitation
-	if err := s.db.WithContext(ctx).Where("token = ?", token).First(&invitation).Error; err != nil {
+	if err := s.db(ctx).Where("token = ?", token).First(&invitation).Error; err != nil {
 		return mapError(err)
 	}
 	value := dbmodel.InvitationAnswer{InvitationID: invitation.ID, QuestionID: questionID, Answer: answer}
-	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+	return s.db(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "invitation_id"}, {Name: "question_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"answer", "updated_at"}),
 	}).Create(&value).Error
 }
 
 func (s *Store) CompleteInvitation(ctx context.Context, token string, completedAt time.Time) error {
-	result := s.db.WithContext(ctx).Model(&dbmodel.Invitation{}).
+	result := s.db(ctx).Model(&dbmodel.Invitation{}).
 		Where("token = ? AND status = ?", token, "accepted").
 		Updates(map[string]any{"status": "completed", "completed_at": completedAt})
 	if result.Error != nil {
@@ -414,7 +427,7 @@ func (s *Store) CompleteInvitation(ctx context.Context, token string, completedA
 
 func (s *Store) GetInvitation(ctx context.Context, jobID, invitationID uint) (servicemodel.Invitation, error) {
 	var value dbmodel.Invitation
-	if err := s.db.WithContext(ctx).Preload("Participant").
+	if err := s.db(ctx).Preload("Participant").
 		Where("id = ? AND job_id = ?", invitationID, jobID).First(&value).Error; err != nil {
 		return servicemodel.Invitation{}, mapError(err)
 	}
@@ -424,7 +437,7 @@ func (s *Store) GetInvitation(ctx context.Context, jobID, invitationID uint) (se
 func (s *Store) UpdateInvitationOutcome(
 	ctx context.Context, jobID, invitationID uint, outcome string,
 ) (servicemodel.Invitation, error) {
-	result := s.db.WithContext(ctx).Model(&dbmodel.Invitation{}).
+	result := s.db(ctx).Model(&dbmodel.Invitation{}).
 		Where("id = ? AND job_id = ?", invitationID, jobID).Update("outcome", outcome)
 	if result.Error != nil {
 		return servicemodel.Invitation{}, mapError(result.Error)
@@ -443,7 +456,7 @@ func (s *Store) CreateScheduledInterview(
 		CreatorID: value.CreatorID, StartsAt: value.StartsAt, Location: value.Location,
 		CandidateToken: value.CandidateToken, SharedDocument: value.SharedDocument, Status: value.Status,
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := s.db(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Create(&entity).Error; err != nil {
 			return err
 		}
@@ -467,7 +480,7 @@ func (s *Store) CreateScheduledInterview(
 
 func (s *Store) ListScheduledInterviews(ctx context.Context, jobID uint) ([]servicemodel.ScheduledInterview, error) {
 	var values []dbmodel.ScheduledInterview
-	if err := preloadScheduledInterview(s.db.WithContext(ctx)).Where("job_id = ?", jobID).
+	if err := preloadScheduledInterview(s.db(ctx)).Where("job_id = ?", jobID).
 		Order("starts_at").Find(&values).Error; err != nil {
 		return nil, err
 	}
@@ -476,7 +489,7 @@ func (s *Store) ListScheduledInterviews(ctx context.Context, jobID uint) ([]serv
 
 func (s *Store) GetScheduledInterview(ctx context.Context, id uint) (servicemodel.ScheduledInterview, error) {
 	var value dbmodel.ScheduledInterview
-	if err := preloadScheduledInterview(s.db.WithContext(ctx)).First(&value, id).Error; err != nil {
+	if err := preloadScheduledInterview(s.db(ctx)).First(&value, id).Error; err != nil {
 		return servicemodel.ScheduledInterview{}, mapError(err)
 	}
 	return dbmapper.ScheduledInterviewToService(value), nil
@@ -484,7 +497,7 @@ func (s *Store) GetScheduledInterview(ctx context.Context, id uint) (servicemode
 
 func (s *Store) GetScheduledInterviewByToken(ctx context.Context, token string) (servicemodel.ScheduledInterview, error) {
 	var value dbmodel.ScheduledInterview
-	if err := preloadScheduledInterview(s.db.WithContext(ctx)).
+	if err := preloadScheduledInterview(s.db(ctx)).
 		Where("candidate_token = ?", token).First(&value).Error; err != nil {
 		return servicemodel.ScheduledInterview{}, mapError(err)
 	}
@@ -494,7 +507,7 @@ func (s *Store) GetScheduledInterviewByToken(ctx context.Context, token string) 
 func (s *Store) UpdateScheduledInterviewStatus(
 	ctx context.Context, id uint, status string,
 ) (servicemodel.ScheduledInterview, error) {
-	result := s.db.WithContext(ctx).Model(&dbmodel.ScheduledInterview{}).
+	result := s.db(ctx).Model(&dbmodel.ScheduledInterview{}).
 		Where("id = ?", id).Update("status", status)
 	if result.Error != nil {
 		return servicemodel.ScheduledInterview{}, result.Error
@@ -508,7 +521,7 @@ func (s *Store) UpdateScheduledInterviewStatus(
 func (s *Store) UpdateScheduledInterviewDocument(
 	ctx context.Context, id uint, document string,
 ) (servicemodel.ScheduledInterview, error) {
-	result := s.db.WithContext(ctx).Model(&dbmodel.ScheduledInterview{}).
+	result := s.db(ctx).Model(&dbmodel.ScheduledInterview{}).
 		Where("id = ?", id).Update("shared_document", document)
 	if result.Error != nil {
 		return servicemodel.ScheduledInterview{}, result.Error
@@ -521,7 +534,7 @@ func (s *Store) UpdateScheduledInterviewDocument(
 
 func (s *Store) ListInterviewNotes(ctx context.Context, interviewID uint) ([]servicemodel.InterviewNote, error) {
 	var values []dbmodel.InterviewNote
-	if err := s.db.WithContext(ctx).Preload("Author").Where("interview_id = ?", interviewID).
+	if err := s.db(ctx).Preload("Author").Where("interview_id = ?", interviewID).
 		Order("created_at, id").Find(&values).Error; err != nil {
 		return nil, err
 	}
@@ -538,7 +551,7 @@ func (s *Store) CreateInterviewNote(
 	entity := dbmodel.InterviewNote{
 		InterviewID: value.InterviewID, AuthorID: value.AuthorID, Body: value.Body,
 	}
-	if err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	if err := s.db(ctx).Transaction(func(tx *gorm.DB) error {
 		var interview dbmodel.ScheduledInterview
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Select("id", "status").First(&interview, value.InterviewID).Error; err != nil {
@@ -554,7 +567,7 @@ func (s *Store) CreateInterviewNote(
 		}
 		return servicemodel.InterviewNote{}, mapError(err)
 	}
-	if err := s.db.WithContext(ctx).Preload("Author").First(&entity, entity.ID).Error; err != nil {
+	if err := s.db(ctx).Preload("Author").First(&entity, entity.ID).Error; err != nil {
 		return servicemodel.InterviewNote{}, mapError(err)
 	}
 	return dbmapper.InterviewNoteToService(entity), nil
@@ -562,7 +575,7 @@ func (s *Store) CreateInterviewNote(
 
 func (s *Store) ListInbox(ctx context.Context, userID uint) ([]servicemodel.ScheduledInterview, error) {
 	var values []dbmodel.ScheduledInterview
-	if err := preloadScheduledInterview(s.db.WithContext(ctx)).
+	if err := preloadScheduledInterview(s.db(ctx)).
 		Joins("JOIN interview_attendees inbox_attendee ON inbox_attendee.interview_id = scheduled_interviews.id").
 		Where("inbox_attendee.user_id = ?", userID).
 		Order("inbox_attendee.created_at DESC").Find(&values).Error; err != nil {
@@ -574,7 +587,7 @@ func (s *Store) ListInbox(ctx context.Context, userID uint) ([]servicemodel.Sche
 func (s *Store) UpdateAttendeeStatus(
 	ctx context.Context, interviewID, userID uint, status string,
 ) (servicemodel.InterviewAttendee, error) {
-	result := s.db.WithContext(ctx).Model(&dbmodel.InterviewAttendee{}).
+	result := s.db(ctx).Model(&dbmodel.InterviewAttendee{}).
 		Where("interview_id = ? AND user_id = ?", interviewID, userID).Update("status", status)
 	if result.Error != nil {
 		return servicemodel.InterviewAttendee{}, result.Error
@@ -583,7 +596,7 @@ func (s *Store) UpdateAttendeeStatus(
 		return servicemodel.InterviewAttendee{}, ErrNotFound
 	}
 	var value dbmodel.InterviewAttendee
-	if err := s.db.WithContext(ctx).Preload("User").
+	if err := s.db(ctx).Preload("User").
 		Where("interview_id = ? AND user_id = ?", interviewID, userID).First(&value).Error; err != nil {
 		return servicemodel.InterviewAttendee{}, mapError(err)
 	}
@@ -598,7 +611,7 @@ func (s *Store) UpdateAttendeeStatus(
 
 func (s *Store) ListCalendar(ctx context.Context, userID uint) ([]servicemodel.ScheduledInterview, error) {
 	var values []dbmodel.ScheduledInterview
-	if err := preloadScheduledInterview(s.db.WithContext(ctx)).
+	if err := preloadScheduledInterview(s.db(ctx)).
 		Joins("JOIN interview_attendees ON interview_attendees.interview_id = scheduled_interviews.id").
 		Where("interview_attendees.user_id = ? AND interview_attendees.status <> ?", userID, "declined").
 		Order("scheduled_interviews.starts_at").Find(&values).Error; err != nil {
@@ -621,7 +634,7 @@ func (s *Store) resolveTraits(ctx context.Context, values []servicemodel.Trait) 
 		}
 		seen[normalized] = struct{}{}
 		var trait dbmodel.Trait
-		if err := s.db.WithContext(ctx).Where(dbmodel.Trait{Normalized: normalized}).
+		if err := s.db(ctx).Where(dbmodel.Trait{Normalized: normalized}).
 			Attrs(dbmodel.Trait{Name: name}).FirstOrCreate(&trait).Error; err != nil {
 			return nil, err
 		}

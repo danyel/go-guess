@@ -4,18 +4,21 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"time"
 
 	"github.com/danyel/go-guess/backend/internal/security"
 	"github.com/danyel/go-guess/backend/internal/web/handler"
+	mw "github.com/danyel/go-guess/backend/internal/web/middleware"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
 func New(h *handler.Handler, tokens security.ITokenManager, frontendURL string) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer, middleware.Compress(5))
 	router.Use(cors(frontendURL))
+	router.Use(mw.TenantSchemaMiddleware(h.Db()))
+	router.Use(middleware.Timeout(2 * time.Minute))
 	router.Get("/api/health", h.Health)
 	router.Post("/api/auth/login", h.Login)
 	router.Get("/api/interviews/{token}", h.GetInterview)

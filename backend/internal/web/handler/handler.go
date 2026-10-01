@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"gorm.io/gorm"
 
 	"github.com/danyel/go-guess/backend/internal/database/repository"
 	"github.com/danyel/go-guess/backend/internal/eventbus"
@@ -24,6 +25,7 @@ import (
 )
 
 type Handler struct {
+	db           *gorm.DB
 	auth         service.IAuthService
 	jobs         service.IJobService
 	questions    service.IQuestionService
@@ -36,6 +38,7 @@ type Handler struct {
 }
 
 func New(
+	db *gorm.DB,
 	auth service.IAuthService,
 	jobs service.IJobService,
 	questions service.IQuestionService,
@@ -47,6 +50,7 @@ func New(
 	frontendURL string,
 ) *Handler {
 	return &Handler{
+		db:   db,
 		auth: auth, jobs: jobs, questions: questions, participants: participants,
 		invitations: invitations, maxUpload: maxUploadMB << 20,
 		users: users, interviews: interviews,
@@ -137,6 +141,10 @@ func (h *Handler) CreateJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, webmapper.JobToWeb(value))
+}
+
+func (h *Handler) Db() *gorm.DB {
+	return h.db
 }
 
 func (h *Handler) UpdateJob(w http.ResponseWriter, r *http.Request) {

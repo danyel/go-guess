@@ -516,6 +516,7 @@ function InvitationsView({
   }
 
   async function reviewAnswers(invitationId: number) {
+    setReview(undefined)
     setReviewingId(invitationId)
     setError('')
     try {
@@ -681,7 +682,7 @@ function InvitationAnswerReview({
           <h2 id="answer-review-title">{current.invitation.participantName}</h2>
           <p>{current.invitation.participantEmail}</p>
         </div>
-        {current.invitation.status === 'completed' && (
+        {current.invitation.outcome !== 'passed' && (
           <div className="outcome-actions" aria-label="Candidate outcome">
             <div>
               <strong>Assessment decision</strong>
