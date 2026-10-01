@@ -36,7 +36,13 @@ application shell.
 
 ## API integration
 
-Vite proxies `/api` to `http://localhost:8080`. Login stores the returned JWT in
+For local tenant hosts such as `nmbs.guess.local`, `src/api/client.ts` derives
+tenant `nmbs`, calls `http://nmbs.guess.local:8080/api`, and sends
+`X-Tenant-Id: nmbs` on every JSON, multipart, file-download, and event-stream
+request. `ypto.guess.local` behaves identically for tenant `ypto`. Other
+hostnames use same-origin `/api`; Vite retains its `/api` proxy for that case.
+
+Login stores the returned JWT in
 `sessionStorage`; protected requests send it as `Authorization: Bearer <token>`. API failures are
 shown in the UI and are never replaced with demo data. A `401` from a protected
 JSON, file, or event-stream request clears authentication and returns the user to
@@ -60,6 +66,7 @@ Supported routes:
 - `PATCH /api/questions/:id` to deprecate or restore a question
 - `GET|POST /api/participants`
 - `GET /api/participants/:id`
+- `PUT /api/participants/:id/cv`
 - `GET /api/participants/:id/photo`
 - `GET /api/participants/:id/cv`
 - `GET /api/interviews/:token`

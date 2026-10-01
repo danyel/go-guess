@@ -3,6 +3,7 @@ package router
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -95,8 +96,11 @@ func authenticate(tokens security.ITokenManager) func(http.Handler) http.Handler
 func cors(origin string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			requestOrigin := r.Header.Get("Origin")
+			if allowedCORSOrigin(requestOrigin, origin) {
+				w.Header().Set("Access-Control-Allow-Origin", requestOrigin)
+			}
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Tenant-Id")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Add("Vary", "Origin")
 			if r.Method == http.MethodOptions {
@@ -106,4 +110,18 @@ func cors(origin string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func allowedCORSOrigin(requestOrigin, configuredOrigin string) bool {
+	if requestOrigin == "" {
+		return false
+	}
+	if requestOrigin == configuredOrigin {
+		return true
+	}
+	parsed, err := url.Parse(requestOrigin)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return false
+	}
+	return strings.HasSuffix(strings.ToLower(parsed.Hostname()), ".guess.local")
 }

@@ -20,9 +20,21 @@ The complete stack runs with:
 make dev
 ```
 
-Open <http://localhost:5173> and sign in with:
+Add the local tenant hostnames once:
 
-- Email: `interviewer@go-guess.local`
+```text
+127.0.0.1 nmbs.guess.local ypto.guess.local
+```
+
+Open <http://nmbs.guess.local:5173> or <http://ypto.guess.local:5173>. The
+hostname's first label is the tenant ID: the frontend calls
+`http://<tenant>.guess.local:8080/api` and sends the same value in the
+`X-Tenant-Id` header on JSON, multipart, file-download, and event-stream
+requests. The backend uses that tenant ID as the isolated PostgreSQL schema.
+
+Sign in with:
+
+- Email: `interviewer@ypto.local`
 - Password: `admin123`
 
 To run the applications outside containers:
@@ -35,8 +47,10 @@ make backend
 make frontend
 ```
 
-The API listens on <http://localhost:8080>. Set a different secure `JWT_SECRET`
-outside local development.
+The API listens on port `8080`. Vite permits the documented local tenant
+hostnames; the API CORS policy permits `*.guess.local` development origins and
+the `X-Tenant-Id` request header. Non-local deployments keep using same-origin
+`/api`. Set a different secure `JWT_SECRET` outside local development.
 
 ## Quality commands
 

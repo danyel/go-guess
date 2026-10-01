@@ -44,6 +44,10 @@ The required toolchain is Go 1.27.1 and React 19.3 with TypeScript/Vite. Use
   domain types, and `src/styles/global.css` contains application-wide styles.
   Keep feature-specific components inside their feature directory. Vite proxies
   `/api` to the Go service in development.
+- Local multi-tenant URLs use `<tenant>.guess.local`. The frontend derives the
+  tenant from the hostname, calls `http://<tenant>.guess.local:8080/api`, and
+  sends `X-Tenant-Id` on every request type. Other deployments use same-origin
+  `/api`. Keep this contract documented in `README.md` and `frontend/README.md`.
 
 Goose files in `backend/migrations` are schema-only and run in every environment.
 `internal/database/seed/common.sql` contains shared reference data;
@@ -88,5 +92,7 @@ exposes only candidate-safe schedule and shared-document data.
   `email`, `contactInfo`, `photo`, and `cv`.
 - Return explicit errors; map expected failures to HTTP status codes and log
   unexpected failures instead of silently falling back.
+- Update the directly related local documentation whenever behavior,
+  configuration, architecture, commands, or public API surfaces change.
 - Commit every repository change with a meaningful conventional prefix such as
   `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, or `chore:`.
