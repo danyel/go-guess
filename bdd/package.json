@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "cucumber-js --config cucumber.mjs"
+    "test": "node run-tests.js"
   },
   "devDependencies": {
     "@cucumber/cucumber": "13.2.1",

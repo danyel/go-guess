@@ -1,0 +1,1 @@
+CREATE SCHEMA ypto AUTHORIZATION go_guess;

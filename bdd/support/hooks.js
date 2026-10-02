@@ -6,6 +6,7 @@ setDefaultTimeout(Number(process.env.BDD_STEP_TIMEOUT_MS ?? 15000));
 Before(async function () {
   this.browser = await chromium.launch({
     headless: process.env.BDD_HEADLESS !== "false",
+    args: ["--host-resolver-rules=MAP ypto.guess.local 127.0.0.1"],
   });
   this.context = await this.browser.newContext();
   this.page = await this.context.newPage();

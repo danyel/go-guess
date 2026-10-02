@@ -749,8 +749,8 @@ describe('Go Guess frontend', () => {
     renderApp('/jobs/7')
     await user.click(await screen.findByRole('tab', { name: /invitations/i }))
     await user.click(screen.getByRole('button', { name: 'Review answers' }))
-    await user.click(await screen.findByRole('button', { name: 'Pass candidate' }))
-    await user.click(screen.getByRole('button', { name: 'Fail candidate' }))
+    await user.click(await screen.findByRole('button', { name: 'Fail candidate' }))
+    await user.click(screen.getByRole('button', { name: 'Pass candidate' }))
 
     expect(fetch).toHaveBeenCalledWith(
       '/api/jobs/7/invitations/44/outcome',

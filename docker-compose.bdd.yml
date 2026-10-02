@@ -5,6 +5,8 @@ services:
       POSTGRES_DB: go_guess
       POSTGRES_USER: go_guess
       POSTGRES_PASSWORD: go_guess
+    volumes:
+      - ./bdd/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U go_guess -d go_guess"]
       interval: 2s
@@ -23,10 +25,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        VITE_GO_LOOSE_API_KEY: gl_bdd_key_that_is_long_enough_for_client
     environment:
-      DATABASE_URL: postgres://go_guess:go_guess@db:5432/go_guess?sslmode=disable
+      DATABASE_URL: postgres://go_guess:go_guess@db:5432/go_guess?sslmode=disable&search_path=ypto
       JWT_SECRET: bdd-test-secret-that-is-at-least-32-characters
-      FRONTEND_URL: http://app:8080
+      FRONTEND_URL: http://ypto.guess.local:8080
+      GO_LOOSE_BASE_URL: http://127.0.0.1:18081
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
       APP_ENV: test
     ports:
@@ -47,7 +52,7 @@ services:
       context: bdd
       dockerfile: Dockerfile
     environment:
-      BDD_BASE_URL: http://127.0.0.1:8080
+      BDD_BASE_URL: http://ypto.guess.local:8080
       BDD_HEADLESS: "true"
       BDD_STEP_TIMEOUT_MS: "15000"
     network_mode: service:app
