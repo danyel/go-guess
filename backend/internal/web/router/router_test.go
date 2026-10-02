@@ -3,7 +3,10 @@ package router
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,7 +17,63 @@ import (
 	"github.com/danyel/go-guess/backend/internal/service"
 	"github.com/danyel/go-guess/backend/internal/service/model"
 	"github.com/danyel/go-guess/backend/internal/web/handler"
+	"github.com/danyel/go-loose/client"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
+
+const (
+	testTenant = "ypto"
+	testAPIKey = "gl_test_key_that_is_long_enough_for_client"
+)
+
+func init() {
+	sql.Register("router-stub", stubDriver{})
+}
+
+func openStubDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	sqlDB, err := sql.Open("router-stub", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	db, err := gorm.Open(postgres.New(postgres.Config{Conn: sqlDB}), &gorm.Config{DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func allowGoLoose(t *testing.T) {
+	t.Helper()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"allowed":true,"tenant_slug":"ypto","application_slug":"guess","api_key_name":"guess"}`))
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("GO_LOOSE_BASE_URL", server.URL)
+}
+
+func newTestHandler(t *testing.T, interviews service.IScheduledInterviewService) *handler.Handler {
+	t.Helper()
+	if interviews == nil {
+		interviews = interviewStub{}
+	}
+	return handler.New(
+		openStubDB(t),
+		authStub{}, jobStub{}, questionStub{}, participantStub{}, invitationStub{},
+		userStub{}, interviews, 10, "http://localhost:5173",
+	)
+}
+
+func withTenant(request *http.Request) {
+	request.Header.Set(client.XTenantId, testTenant)
+}
+
+func withAPIKey(request *http.Request) {
+	request.Header.Set(client.DefaultHeader, testAPIKey)
+}
 
 type authStub struct{}
 
@@ -167,9 +226,8 @@ func (s *interviewCapture) GetParticipantMeeting(
 }
 
 func TestHealthDoesNotRequireAuthentication(t *testing.T) {
-	h := handler.New(authStub{}, jobStub{}, questionStub{}, participantStub{}, invitationStub{}, userStub{}, interviewStub{}, 10, "http://localhost:5173")
 	tokens := security.NewTokenManager("01234567890123456789012345678901", time.Hour)
-	router := New(h, tokens, "http://localhost:5173")
+	router := New(newTestHandler(t, nil), tokens, "http://localhost:5173")
 	request := httptest.NewRequest(http.MethodGet, "/api/health", nil)
 	response := httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -179,60 +237,66 @@ func TestHealthDoesNotRequireAuthentication(t *testing.T) {
 }
 
 func TestProtectedRouteRequiresValidToken(t *testing.T) {
-	h := handler.New(authStub{}, jobStub{}, questionStub{}, participantStub{}, invitationStub{}, userStub{}, interviewStub{}, 10, "http://localhost:5173")
+	allowGoLoose(t)
 	tokens := security.NewTokenManager("01234567890123456789012345678901", time.Hour)
-	router := New(h, tokens, "http://localhost:5173")
+	router := New(newTestHandler(t, nil), tokens, "http://localhost:5173")
 
+	unauthorizedRequest := httptest.NewRequest(http.MethodGet, "/api/jobs", nil)
+	withTenant(unauthorizedRequest)
+	withAPIKey(unauthorizedRequest)
 	unauthorized := httptest.NewRecorder()
-	router.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/api/jobs", nil))
+	router.ServeHTTP(unauthorized, unauthorizedRequest)
 	if unauthorized.Code != http.StatusUnauthorized || unauthorized.Header().Get("Content-Type") != "application/json" {
-		t.Fatalf("expected JSON 401, got %d %q", unauthorized.Code, unauthorized.Header().Get("Content-Type"))
+		t.Fatalf("expected JSON 401, got %d %q %s", unauthorized.Code, unauthorized.Header().Get("Content-Type"), unauthorized.Body.String())
 	}
 	token, err := tokens.Issue(1, "interviewer@example.com", "interviewer")
 	if err != nil {
 		t.Fatal(err)
 	}
 	request := httptest.NewRequest(http.MethodGet, "/api/jobs", nil)
+	withTenant(request)
+	withAPIKey(request)
 	request.Header.Set("Authorization", "Bearer "+token)
 	authorized := httptest.NewRecorder()
 	router.ServeHTTP(authorized, request)
 	if authorized.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", authorized.Code)
+		t.Fatalf("expected 200, got %d %s", authorized.Code, authorized.Body.String())
 	}
 }
 
 func TestProtectedInterviewUsesAuthenticatedUserID(t *testing.T) {
+	allowGoLoose(t)
 	interviews := &interviewCapture{}
-	h := handler.New(
-		authStub{}, jobStub{}, questionStub{}, participantStub{}, invitationStub{},
-		userStub{}, interviews, 10, "http://localhost:5173",
-	)
 	tokens := security.NewTokenManager("01234567890123456789012345678901", time.Hour)
-	api := New(h, tokens, "http://localhost:5173")
+	api := New(newTestHandler(t, interviews), tokens, "http://localhost:5173")
 	token, err := tokens.Issue(42, "co@example.com", "co_interviewer")
 	if err != nil {
 		t.Fatal(err)
 	}
 	request := httptest.NewRequest(http.MethodGet, "/api/scheduled-interviews/9", nil)
+	withTenant(request)
+	withAPIKey(request)
 	request.Header.Set("Authorization", "Bearer "+token)
 	response := httptest.NewRecorder()
 	api.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || interviews.userID != 42 {
-		t.Fatalf("expected authenticated user 42, got status=%d user=%d", response.Code, interviews.userID)
+		t.Fatalf("expected authenticated user 42, got status=%d user=%d body=%s", response.Code, interviews.userID, response.Body.String())
 	}
 }
 
 func TestParticipantMeetingDoesNotExposeInternalCandidateData(t *testing.T) {
 	interviews := &interviewCapture{}
-	h := handler.New(
-		authStub{}, jobStub{}, questionStub{}, participantStub{}, invitationStub{},
-		userStub{}, interviews, 10, "http://localhost:5173",
+	api := New(
+		newTestHandler(t, interviews),
+		security.NewTokenManager("01234567890123456789012345678901", time.Hour),
+		"http://localhost:5173",
 	)
-	api := New(h, security.NewTokenManager("01234567890123456789012345678901", time.Hour), "http://localhost:5173")
+	request := httptest.NewRequest(http.MethodGet, "/api/participant-meetings/token", nil)
+	withTenant(request)
 	response := httptest.NewRecorder()
-	api.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/participant-meetings/token", nil))
+	api.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d", response.Code)
+		t.Fatalf("expected 200, got %d %s", response.Code, response.Body.String())
 	}
 	body := response.Body.Bytes()
 	if bytes.Contains(body, []byte("private@example.com")) ||
@@ -244,4 +308,45 @@ func TestParticipantMeetingDoesNotExposeInternalCandidateData(t *testing.T) {
 	if err := json.Unmarshal(body, &payload); err != nil || payload["sharedDocument"] != "candidate document" {
 		t.Fatalf("unexpected public response: %s", body)
 	}
+}
+
+type stubDriver struct{}
+
+func (stubDriver) Open(string) (driver.Conn, error) { return stubConn{}, nil }
+
+type stubConn struct{}
+
+func (stubConn) Prepare(string) (driver.Stmt, error) { return stubStmt{}, nil }
+func (stubConn) Close() error                        { return nil }
+func (stubConn) Begin() (driver.Tx, error)           { return stubTx{}, nil }
+func (stubConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, error) {
+	return stubTx{}, nil
+}
+func (stubConn) ExecContext(context.Context, string, []driver.NamedValue) (driver.Result, error) {
+	return driver.RowsAffected(0), nil
+}
+func (stubConn) QueryContext(context.Context, string, []driver.NamedValue) (driver.Rows, error) {
+	return &stubRows{}, nil
+}
+
+type stubTx struct{}
+
+func (stubTx) Commit() error   { return nil }
+func (stubTx) Rollback() error { return nil }
+
+type stubStmt struct{}
+
+func (stubStmt) Close() error  { return nil }
+func (stubStmt) NumInput() int { return -1 }
+func (stubStmt) Exec([]driver.Value) (driver.Result, error) {
+	return driver.RowsAffected(0), nil
+}
+func (stubStmt) Query([]driver.Value) (driver.Rows, error) { return &stubRows{}, nil }
+
+type stubRows struct{}
+
+func (stubRows) Columns() []string { return nil }
+func (stubRows) Close() error      { return nil }
+func (stubRows) Next([]driver.Value) error {
+	return io.EOF
 }

@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/danyel/go-loose/client"
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -34,6 +35,11 @@ import (
 	"github.com/danyel/go-guess/backend/internal/web/handler"
 	webmodel "github.com/danyel/go-guess/backend/internal/web/model"
 	"github.com/danyel/go-guess/backend/internal/web/router"
+)
+
+const (
+	integrationTenant = "ypto"
+	integrationAPIKey = "gl_test_key_that_is_long_enough_for_client"
 )
 
 var (
@@ -110,6 +116,28 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "reapply idempotent test seed:", err)
 		os.Exit(1)
 	}
+	if _, err := sqlDB.ExecContext(ctx, `
+		CREATE SCHEMA IF NOT EXISTS ypto;
+		DO $$
+		DECLARE r record;
+		BEGIN
+			FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+				EXECUTE format('ALTER TABLE public.%I SET SCHEMA ypto', r.tablename);
+			END LOOP;
+		END $$;
+	`); err != nil {
+		fmt.Fprintln(os.Stderr, "move tables into tenant schema:", err)
+		os.Exit(1)
+	}
+
+	authorization := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"allowed":true,"tenant_slug":"ypto","application_slug":"guess","api_key_name":"guess"}`))
+	}))
+	if err := os.Setenv("GO_LOOSE_BASE_URL", authorization.URL); err != nil {
+		fmt.Fprintln(os.Stderr, "set Go Loose URL:", err)
+		os.Exit(1)
+	}
 
 	gormDB, err := gorm.Open(postgres.Open(databaseURL), &gorm.Config{})
 	if err != nil {
@@ -134,6 +162,7 @@ func TestMain(m *testing.M) {
 	interviews := service.NewScheduledInterviewService(store, testBus)
 	testServer = httptest.NewServer(router.New(
 		handler.New(
+			gormDB,
 			service.NewAuthService(store, tokens),
 			service.NewJobService(store),
 			service.NewQuestionService(store),
@@ -149,6 +178,7 @@ func TestMain(m *testing.M) {
 	))
 
 	code := m.Run()
+	authorization.Close()
 	testServer.Close()
 	_ = amqpBus.Close()
 	_ = sqlDB.Close()
@@ -323,6 +353,7 @@ func TestCompleteInterviewWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	streamRequest.Header.Set(client.XTenantId, integrationTenant)
 	streamResponse, err := http.DefaultClient.Do(streamRequest)
 	if err != nil {
 		t.Fatal(err)
@@ -432,11 +463,13 @@ func requestJSON(
 	if err != nil {
 		t.Fatal(err)
 	}
+	request.Header.Set(client.XTenantId, integrationTenant)
 	if body != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
+		request.Header.Set(client.DefaultHeader, integrationAPIKey)
 	}
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
