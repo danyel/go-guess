@@ -15,8 +15,6 @@ app:
   frontendURL: http://localhost:8080
   tokenTTL: 8h
   maxUploadMB: 10
-  # Authorize URL for Go Loose. %s is the request X-Tenant-Id.
-  goLooseBaseURL: https://%s.auth.dev
 
 secrets:
   jwtSecret: ""

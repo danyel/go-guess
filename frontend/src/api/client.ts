@@ -93,11 +93,7 @@ function apiURL(path: string): string {
 
 function tenantHeader(): Record<string, string> {
   const tenant = tenantFromHostname(window.location.hostname)
-  const apiKey = import.meta.env.VITE_GO_LOOSE_API_KEY
-  return {
-    ...(tenant ? { 'X-Tenant-Id': tenant } : {}),
-    ...(typeof apiKey === 'string' && apiKey !== '' ? { 'X-API-Key': apiKey } : {}),
-  }
+  return tenant ? { 'X-Tenant-Id': tenant } : {}
 }
 
 async function request<T>(

@@ -36,27 +36,15 @@ application shell.
 
 ## API integration
 
-For local tenant hosts such as `nmbs.guess.local`, `src/api/client.ts` derives
+For local tenant hosts such as `nmbs.guess.dev`, `src/api/client.ts` derives
 tenant `nmbs`, calls same-origin `/api` through the shared HTTPS proxy, and sends
 `X-Tenant-Id: nmbs` on every JSON, multipart, file-download, and event-stream
-request. `ypto.guess.local` behaves identically for tenant `ypto`. Other
+request. `ypto.guess.dev` behaves identically for tenant `ypto`. Other
 hostnames use same-origin `/api`; Vite retains its `/api` proxy for that case.
 
-Set `VITE_GO_LOOSE_API_KEY` before `npm run dev` or `npm run build` to also send
-`X-API-Key`. Vite reads `frontend/.env.local` for local development; that file
-matches `*.local` and must not be committed. The standalone frontend image
-accepts the same value as a build argument:
-
-```bash
-docker build --build-arg VITE_GO_LOOSE_API_KEY='gl_replace_with_issued_secret' \
-  -t go-guess-frontend .
-```
-
-The variable is inlined into the JavaScript bundle. Treat it as an application
-credential for Go Loose, not as a secret equivalent to the interviewer JWT. If
-it is unset or empty, the client omits the header and protected interviewer
-routes fail closed with 401. Login and participant routes do not require the
-key, but the client still sends it when the variable is present.
+On the configured tenant hosts, the app checks `/api/auth/session` and redirects
+to `/api/auth/login` when no Go Loose browser session exists. The callback
+exchanges that session for the bearer token used by the typed API client.
 Invitation and participant-meeting URLs use the validated request origin so
 links stay on the tenant hostname. Copy actions fall back to a temporary selected
 textarea when the Clipboard API is unavailable on local HTTP domains.
@@ -65,7 +53,9 @@ Login stores the returned JWT in
 `sessionStorage`; protected requests send it as `Authorization: Bearer <token>`. API failures are
 shown in the UI and are never replaced with demo data. A `401` from a protected
 JSON, file, or event-stream request clears authentication and returns the user to
-`/login`. The app also schedules logout from the JWT expiration claim so an idle
+`/login`. On `nmbs.guess.dev` and `ypto.guess.dev`, the app restores
+`/api/auth/session` or redirects to `/api/auth/login`; participant routes stay
+token-based. The app also schedules logout from the JWT expiration claim so an idle
 expired session cannot remain on a protected page.
 
 The machine-readable OpenAPI 3.0 contract at `/api/openapi.json` is the source
@@ -120,7 +110,5 @@ receives interviewer notes or assessment reference answers.
 
 ## Container
 
-Build with `docker build -t go-guess-frontend .`. Pass
-`--build-arg VITE_GO_LOOSE_API_KEY=...` when the image must call protected
-interviewer routes; see the API integration section. The production Nginx server
+Build with `docker build -t go-guess-frontend .`. The production Nginx server
 serves the SPA and proxies `/api` to the Docker Compose service `api:8080`.

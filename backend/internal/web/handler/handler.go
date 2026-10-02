@@ -19,6 +19,7 @@ import (
 
 	"github.com/danyel/go-guess/backend/internal/database/repository"
 	"github.com/danyel/go-guess/backend/internal/eventbus"
+	"github.com/danyel/go-guess/backend/internal/golooseauth"
 	"github.com/danyel/go-guess/backend/internal/security"
 	"github.com/danyel/go-guess/backend/internal/service"
 	servicemodel "github.com/danyel/go-guess/backend/internal/service/model"
@@ -37,6 +38,7 @@ type Handler struct {
 	interviews   service.IScheduledInterviewService
 	maxUpload    int64
 	frontendURL  string
+	browser      *golooseauth.Registry
 }
 
 func New(
@@ -651,7 +653,8 @@ func (h *Handler) frontendURLForRequest(r *http.Request) string {
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return h.frontendURL
 	}
-	if strings.EqualFold(parsed.Hostname(), tenant+".guess.local") {
+	if strings.EqualFold(parsed.Hostname(), tenant+".guess.local") ||
+		strings.EqualFold(parsed.Hostname(), tenant+".guess.dev") {
 		return origin
 	}
 	return h.frontendURL

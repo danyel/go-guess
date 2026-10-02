@@ -28,6 +28,7 @@ const CandidateThreshold = 60.0
 
 type IAuthService interface {
 	Login(context.Context, string, string) (string, model.User, error)
+	EstablishExternalSession(context.Context, string, string) (string, model.User, error)
 }
 
 type IJobService interface {
@@ -79,6 +80,36 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 	user, err := s.store.FindUserByEmail(ctx, strings.TrimSpace(email))
 	if err != nil || !security.CheckPassword(user.PasswordHash, password) {
 		return "", model.User{}, ErrInvalidCredentials
+	}
+	token, err := s.tokens.Issue(user.ID, user.Email, user.Role)
+	if err != nil {
+		return "", model.User{}, err
+	}
+	user.PasswordHash = ""
+	return token, user, nil
+}
+
+func (s *AuthService) EstablishExternalSession(ctx context.Context, email, displayName string) (string, model.User, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	displayName = strings.TrimSpace(displayName)
+	if email == "" {
+		return "", model.User{}, ErrValidation
+	}
+	user, err := s.store.FindUserByEmail(ctx, email)
+	if errors.Is(err, repository.ErrNotFound) {
+		if displayName == "" {
+			displayName = email
+		}
+		hash, hashErr := security.HashPassword(uuid.NewString())
+		if hashErr != nil {
+			return "", model.User{}, hashErr
+		}
+		user, err = s.store.CreateUser(ctx, model.User{
+			Email: email, DisplayName: displayName, Role: "interviewer", PasswordHash: hash,
+		})
+	}
+	if err != nil {
+		return "", model.User{}, err
 	}
 	token, err := s.tokens.Issue(user.ID, user.Email, user.Role)
 	if err != nil {

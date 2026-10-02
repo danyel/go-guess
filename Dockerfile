@@ -4,8 +4,6 @@ WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-ARG VITE_GO_LOOSE_API_KEY
-ENV VITE_GO_LOOSE_API_KEY=$VITE_GO_LOOSE_API_KEY
 RUN npm run build
 
 # Compile the API and seed binaries.

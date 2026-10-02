@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 
+	"github.com/danyel/go-guess/backend/internal/golooseauth"
 	"github.com/danyel/go-loose/client"
 	"gorm.io/gorm"
 )
@@ -18,7 +19,7 @@ const TxKey contextKey = "tenant_db_tx"
 var safeSchemaRegex = regexp.MustCompile(`^[a-zA-Z0-9_:-]+$`)
 
 // TenantSchemaMiddleware isolates database connections per request using PostgreSQL schemas
-func TenantSchemaMiddleware(db *gorm.DB) func(http.Handler) http.Handler {
+func TenantSchemaMiddleware(db *gorm.DB, appDomain string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Path == "/api/health" || r.URL.Path == "/api/openapi.json" {
@@ -27,9 +28,10 @@ func TenantSchemaMiddleware(db *gorm.DB) func(http.Handler) http.Handler {
 			}
 			tenantID := r.Header.Get(client.XTenantId)
 			if tenantID == "" {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusBadRequest)
-				_, _ = w.Write([]byte(`{"error": "Missing X-Tenant-Id header"}`))
+				tenantID = golooseauth.TenantFromHost(r.Host, appDomain)
+			}
+			if tenantID == "" || db == nil {
+				next.ServeHTTP(w, r)
 				return
 			}
 

@@ -9,10 +9,13 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/danyel/go-guess/backend/internal/config"
 	"github.com/danyel/go-guess/backend/internal/eventbus"
+	"github.com/danyel/go-guess/backend/internal/golooseauth"
 	"github.com/danyel/go-guess/backend/internal/security"
 	"github.com/danyel/go-guess/backend/internal/service"
 	"github.com/danyel/go-guess/backend/internal/service/model"
@@ -24,7 +27,6 @@ import (
 
 const (
 	testTenant = "ypto"
-	testAPIKey = "gl_test_key_that_is_long_enough_for_client"
 )
 
 func init() {
@@ -45,16 +47,6 @@ func openStubDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-func allowGoLoose(t *testing.T) {
-	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"allowed":true,"tenant_slug":"ypto","application_slug":"guess","api_key_name":"guess"}`))
-	}))
-	t.Cleanup(server.Close)
-	t.Setenv("GO_LOOSE_BASE_URL", server.URL)
-}
-
 func newTestHandler(t *testing.T, interviews service.IScheduledInterviewService) *handler.Handler {
 	t.Helper()
 	if interviews == nil {
@@ -71,13 +63,13 @@ func withTenant(request *http.Request) {
 	request.Header.Set(client.XTenantId, testTenant)
 }
 
-func withAPIKey(request *http.Request) {
-	request.Header.Set(client.DefaultHeader, testAPIKey)
-}
-
 type authStub struct{}
 
 func (authStub) Login(context.Context, string, string) (string, model.User, error) {
+	return "", model.User{}, service.ErrInvalidCredentials
+}
+
+func (authStub) EstablishExternalSession(context.Context, string, string) (string, model.User, error) {
 	return "", model.User{}, service.ErrInvalidCredentials
 }
 
@@ -237,13 +229,11 @@ func TestHealthDoesNotRequireAuthentication(t *testing.T) {
 }
 
 func TestProtectedRouteRequiresValidToken(t *testing.T) {
-	allowGoLoose(t)
 	tokens := security.NewTokenManager("01234567890123456789012345678901", time.Hour)
 	router := New(newTestHandler(t, nil), tokens, "http://localhost:5173")
 
 	unauthorizedRequest := httptest.NewRequest(http.MethodGet, "/api/jobs", nil)
 	withTenant(unauthorizedRequest)
-	withAPIKey(unauthorizedRequest)
 	unauthorized := httptest.NewRecorder()
 	router.ServeHTTP(unauthorized, unauthorizedRequest)
 	if unauthorized.Code != http.StatusUnauthorized || unauthorized.Header().Get("Content-Type") != "application/json" {
@@ -255,7 +245,6 @@ func TestProtectedRouteRequiresValidToken(t *testing.T) {
 	}
 	request := httptest.NewRequest(http.MethodGet, "/api/jobs", nil)
 	withTenant(request)
-	withAPIKey(request)
 	request.Header.Set("Authorization", "Bearer "+token)
 	authorized := httptest.NewRecorder()
 	router.ServeHTTP(authorized, request)
@@ -265,7 +254,6 @@ func TestProtectedRouteRequiresValidToken(t *testing.T) {
 }
 
 func TestProtectedInterviewUsesAuthenticatedUserID(t *testing.T) {
-	allowGoLoose(t)
 	interviews := &interviewCapture{}
 	tokens := security.NewTokenManager("01234567890123456789012345678901", time.Hour)
 	api := New(newTestHandler(t, interviews), tokens, "http://localhost:5173")
@@ -275,7 +263,6 @@ func TestProtectedInterviewUsesAuthenticatedUserID(t *testing.T) {
 	}
 	request := httptest.NewRequest(http.MethodGet, "/api/scheduled-interviews/9", nil)
 	withTenant(request)
-	withAPIKey(request)
 	request.Header.Set("Authorization", "Bearer "+token)
 	response := httptest.NewRecorder()
 	api.ServeHTTP(response, request)
@@ -307,6 +294,50 @@ func TestParticipantMeetingDoesNotExposeInternalCandidateData(t *testing.T) {
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil || payload["sharedDocument"] != "candidate document" {
 		t.Fatalf("unexpected public response: %s", body)
+	}
+}
+
+func TestOpenAPIDoesNotRequireTenant(t *testing.T) {
+	api := New(
+		newTestHandler(t, nil),
+		security.NewTokenManager("01234567890123456789012345678901", time.Hour),
+		"http://localhost:5173",
+	)
+	response := httptest.NewRecorder()
+	api.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/openapi.json", nil))
+	if response.Code != http.StatusOK || !bytes.Contains(response.Body.Bytes(), []byte(`"openapi"`)) {
+		t.Fatalf("expected OpenAPI document, got %d %s", response.Code, response.Body.Bytes())
+	}
+}
+
+func TestTenantHostLoginRedirectsToMatchingGoLooseClient(t *testing.T) {
+	h := newTestHandler(t, nil)
+	browser, err := golooseauth.New(config.GoLooseConfig{
+		AuthDomain: "auth.dev",
+		AppDomain:  "guess.dev",
+		Tenants: map[string]config.GoLooseTenant{
+			"nmbs": {ClientID: "glc_nmbs", ClientSecret: "secret"},
+			"ypto": {ClientID: "glc_ypto", ClientSecret: "secret"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.SetBrowserAuth(browser)
+	api := New(h, security.NewTokenManager("01234567890123456789012345678901", time.Hour), "http://localhost:5173")
+
+	for _, slug := range []string{"nmbs", "ypto"} {
+		request := httptest.NewRequest(http.MethodGet, "/api/auth/login", nil)
+		request.Host = slug + ".guess.dev"
+		response := httptest.NewRecorder()
+		api.ServeHTTP(response, request)
+		location := response.Header().Get("Location")
+		if response.Code != http.StatusFound || !strings.HasPrefix(location, "https://"+slug+".auth.dev/connect/authorize?") {
+			t.Fatalf("%s login redirect = %d %s", slug, response.Code, location)
+		}
+		if !strings.Contains(location, "redirect_uri=https%3A%2F%2F"+slug+".guess.dev%2Fapi%2Fauth%2Fcallback") {
+			t.Fatalf("%s callback missing from %s", slug, location)
+		}
 	}
 }
 

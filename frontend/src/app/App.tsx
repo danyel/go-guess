@@ -9,7 +9,7 @@ import {DataProvider} from './DataContext'
 
 export default function App() {
     const location = useLocation();
-    const {authenticated, sessionExpired, completeLogin, logout} = useAuthSession();
+    const {authenticated, sessionExpired, ssoStatus, completeLogin, logout} = useAuthSession();
     if (location.pathname.startsWith('/participant/')) {
         return (
             <Routes>
@@ -20,6 +20,9 @@ export default function App() {
         )
     }
     if (!authenticated) {
+        if (ssoStatus !== 'idle') {
+            return <main className="login-shell"><p>Redirecting to sign in…</p></main>
+        }
         return <LoginPage onLogin={completeLogin} sessionExpired={sessionExpired}/>
     }
     return (

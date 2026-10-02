@@ -3,7 +3,7 @@ module github.com/danyel/go-guess/backend
 go 1.27.1
 
 require (
-	github.com/danyel/go-loose v0.0.0-20261002165652-46030a5b144f
+	github.com/danyel/go-loose v0.0.0-20261002194542-c2091e746a14
 	github.com/go-chi/chi/v5 v5.2.3
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0

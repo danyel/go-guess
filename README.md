@@ -20,16 +20,17 @@ The complete stack runs with:
 make dev
 ```
 
-Add the local tenant hostnames once:
+`docker compose up -d --build` serves the UI through the local Traefik edge at
+<https://nmbs.guess.dev> and <https://ypto.guess.dev>. Add the hostnames once:
 
 ```text
-127.0.0.1 nmbs.guess.local ypto.guess.local
+127.0.0.1 nmbs.guess.dev ypto.guess.dev
 127.0.0.1 auth.dev nmbs.auth.dev ypto.auth.dev
 ```
 
 Start the shared TLS proxy described in
 `/home/dnoulet/go/infrasctruture/docs/APPLICATIONS.md`, then open
-<https://nmbs.guess.local> or <https://ypto.guess.local>. The hostname's first
+<https://nmbs.guess.dev> or <https://ypto.guess.dev>. The hostname's first
 label is the tenant ID: the frontend calls same-origin `/api` and sends the same value in the
 `X-Tenant-Id` header on JSON, multipart, file-download, and event-stream
 requests. The backend uses that tenant ID as the isolated PostgreSQL schema and
@@ -37,8 +38,10 @@ builds participant invitation and meeting links from the matching tenant browser
 origin instead of the static localhost fallback.
 
 Compose mounts the infrastructure CA from
-`${LOCAL_DEV_CERTS_DIR:-/home/dnoulet/go/infrasctruture/certs}` into the API so
-its HTTPS authorization calls to Go Loose validate normally.
+`${LOCAL_CA_FILE:-../infrastructure/certs/local-ca.crt}` into the API. The
+browser is redirected through the matching Go Loose tenant and returns to
+`/api/auth/callback`. Set the per-tenant `GO_LOOSE_*_CLIENT_ID` and
+`GO_LOOSE_*_CLIENT_SECRET` variables in the environment; never commit them.
 
 Sign in with:
 
@@ -58,15 +61,14 @@ make frontend
 The API listens on port `8080` inside Docker and is exposed to browsers only
 through Traefik and the frontend's same-origin `/api` proxy. Vite permits the
 documented local tenant hostnames; the API CORS policy permits `*.guess.local` development origins and
-the `Authorization`, `X-API-Key`, and `X-Tenant-Id` request headers. Non-local
+the `Authorization` and `X-Tenant-Id` request headers. Non-local
 deployments keep using same-origin `/api`. Set a different secure `JWT_SECRET`
-outside local development. Protected interviewer calls also need a Go Loose API
-key, documented below.
+outside local development.
 
 ## API contract
 
 The backend exposes its current OpenAPI 3.0 contract at
-<https://nmbs.guess.local/api/openapi.json>. The document is assembled in memory
+<https://nmbs.guess.dev/api/openapi.json>. The document is assembled in memory
 from the same typed registrations that add routes to Chi, including request and
 response schemas, status codes, authentication, tenant headers, path/query
 parameters, multipart uploads, downloads, and event streams. It therefore
@@ -74,55 +76,34 @@ requires no generation command and cannot miss a newly registered route.
 
 `/api/openapi.json` and `/api/health` are system endpoints and do not require a
 tenant header. Every other route declares required `X-Tenant-Id`. Protected
-operations also declare `apiKeyAuth` (`X-API-Key`) and `bearerAuth`.
+operations also declare bearer authentication.
 
 ## Go Loose authorization
 
-Interviewer routes are authorized by Go Loose before the JWT check. The tenant
-is read from the request `X-Tenant-Id` header and sent to Go Loose with
-application slug `guess`. It is not taken from process configuration. The client
-calls `POST /api/v1/authorize` on every protected request, removes `X-API-Key`
-before the handler runs, and fails closed on a missing key, a denial, or a
-control-plane error. There is no allow-on-error fallback. The client timeout is
-2 seconds.
+Tenant hosts start browser authentication at `GET /api/auth/login`. Go Loose
+returns to `/api/auth/callback`, and `GET /api/auth/session` exchanges the
+resulting secure browser session for the application's bearer JWT. The tenant
+is derived from the request host, or from `X-Tenant-Id` for API calls.
 
-`GO_LOOSE_BASE_URL` is the authorize base URL. The default is
-`https://%s.auth.dev`. A single `%s` is replaced with the tenant, which must
-then be one DNS label (`nmbs`, not `nmbs.auth.dev` or a host with a port). A
-URL without `%s` is used unchanged, while the tenant still comes from the
-header. Docker Compose passes this variable to the API. Helm sets it from
-`app.goLooseBaseURL`.
-
-These routes do not require `X-API-Key` or a JWT:
+Compose configures `GO_LOOSE_AUTH_DOMAIN`, `GO_LOOSE_APP_DOMAIN`,
+`GO_LOOSE_CA_FILE`, and per-tenant client ID and secret variables. These routes
+do not require a JWT:
 
 - `GET /api/health` and `GET /api/openapi.json`
-- `POST /api/auth/login`
+- browser login, callback, logout, and session routes under `/api/auth`
+- `POST /api/auth/login` for password login outside configured SSO hosts
 - opaque-token participant interview and meeting routes under
   `/api/interviews/{token}` and `/api/participant-meetings/{token}`
 
 Login and participant routes still require `X-Tenant-Id`. Health and OpenAPI do
-not.
+not. Browser authentication routes derive the tenant from the configured host.
 
-Issue one API key per tenant in the Go Loose console for the `guess`
-application. The local installer seed creates that application for `nmbs` and
-`ypto`. For a containerized frontend, pass the key at image build time:
+## Switch the Git remote
 
-```bash
-VITE_GO_LOOSE_API_KEY='gl_replace_with_issued_secret' docker compose build web
-```
-
-For Vite outside Docker, put the same variable in `frontend/.env.local`. That
-file is ignored. Vite inlines `VITE_` variables into the browser bundle, so this
-key is visible to anyone who can load the interviewer application. It identifies
-the Guess application to Go Loose; it does not replace the interviewer JWT or
-the participant token. Do not commit it or reuse a key across tenants.
-
-The published production image does not receive this build argument. A manual
-production image can:
-
-```bash
-docker build --build-arg VITE_GO_LOOSE_API_KEY='gl_replace_with_issued_secret' -t go-guess .
-```
+Run `scripts/toggle-origin.sh` to inspect `origin` and switch it between
+`https://github.com/danyel/go-guess.git` and
+`https://forgejo.dev/exr462/go-guess.git`. The script exits without changing an
+unrecognized remote URL.
 
 ## Quality commands
 
@@ -183,8 +164,7 @@ docker build -t go-guess .
 
 The image serves the frontend and API on port `8080`. It applies database
 migrations and shared production fixtures before startup. PostgreSQL, RabbitMQ,
-and these environment variables must be provided. `GO_LOOSE_BASE_URL` is
-optional and defaults to `https://%s.auth.dev`:
+and these environment variables must be provided:
 
 ```bash
 docker run --rm -p 8080:8080 \
@@ -192,7 +172,6 @@ docker run --rm -p 8080:8080 \
   -e RABBITMQ_URL='amqp://user:password@rabbitmq:5672/' \
   -e JWT_SECRET='replace-with-at-least-32-characters' \
   -e FRONTEND_URL='https://go-guess.example.com' \
-  -e GO_LOOSE_BASE_URL='https://%s.auth.dev' \
   go-guess
 ```
 
@@ -218,15 +197,6 @@ For the repository's single-node Docker Rancher setup, run
 `make rancher-storage` once before the first production deployment. This
 installs the default persistent StorageClass documented in
 `rancher-install.txt`.
-
-The chart passes `app.goLooseBaseURL` to the API as `GO_LOOSE_BASE_URL`. The
-default is `https://%s.auth.dev`. Override it when Go Loose is not reachable
-at `<tenant>.auth.dev`:
-
-```bash
-helm upgrade --install go-guess deploy/helm/go-guess \
-  --set-string app.goLooseBaseURL='https://%s.auth.example.com'
-```
 
 Development uses demo fixtures, ephemeral database and message-broker storage,
 and NodePort `30080`. Production uses production fixtures, persistent volumes,

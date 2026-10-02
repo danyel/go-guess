@@ -10,7 +10,7 @@ func TestTenantMiddlewareAllowsSystemEndpointsWithoutTenant(t *testing.T) {
 	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
-	handler := TenantSchemaMiddleware(nil)(next)
+	handler := TenantSchemaMiddleware(nil, "guess.dev")(next)
 
 	for _, path := range []string{"/api/health", "/api/openapi.json"} {
 		response := httptest.NewRecorder()
@@ -21,15 +21,15 @@ func TestTenantMiddlewareAllowsSystemEndpointsWithoutTenant(t *testing.T) {
 	}
 }
 
-func TestTenantMiddlewareStillRequiresTenantForDataEndpoints(t *testing.T) {
-	handler := TenantSchemaMiddleware(nil)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
-		t.Fatal("data endpoint reached without a tenant")
+func TestTenantMiddlewareUsesPublicSchemaWithoutTenant(t *testing.T) {
+	handler := TenantSchemaMiddleware(nil, "guess.dev")(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
 	}))
 	response := httptest.NewRecorder()
 
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/jobs", nil))
 
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400, got %d", response.Code)
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", response.Code)
 	}
 }

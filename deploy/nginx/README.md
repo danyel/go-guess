@@ -58,5 +58,5 @@ services should remain `ClusterIP` services without NodePorts.
 Protected interviewer routes also call Go Loose from the application pod, using
 `app.goLooseBaseURL` (default `https://%s.auth.dev`, where `%s` is the
 request tenant). That address must be reachable from the cluster. The browser
-sends `X-API-Key` only when the published frontend image was built with
-`VITE_GO_LOOSE_API_KEY`. Nginx does not add or strip that header.
+forwards browser authentication and API requests without adding application
+credentials. Nginx does not add or strip authorization headers.

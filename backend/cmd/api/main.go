@@ -14,6 +14,7 @@ import (
 	"github.com/danyel/go-guess/backend/internal/database"
 	"github.com/danyel/go-guess/backend/internal/database/repository"
 	"github.com/danyel/go-guess/backend/internal/eventbus"
+	"github.com/danyel/go-guess/backend/internal/golooseauth"
 	"github.com/danyel/go-guess/backend/internal/security"
 	"github.com/danyel/go-guess/backend/internal/service"
 	"github.com/danyel/go-guess/backend/internal/web/handler"
@@ -46,21 +47,28 @@ func main() {
 	}
 	defer bus.Close()
 	tokens := security.NewTokenManager(cfg.JWTSecret, cfg.TokenTTL)
+	browser, err := golooseauth.New(cfg.GoLoose)
+	if err != nil {
+		slog.Error("configure Go Loose login", "error", err)
+		os.Exit(1)
+	}
 	invitations := service.NewInvitationService(store, cfg.FrontendURL)
 	interviews := service.NewScheduledInterviewService(store, bus)
+	apiHandler := handler.New(
+		db,
+		service.NewAuthService(store, tokens),
+		service.NewJobService(store),
+		service.NewQuestionService(store),
+		service.NewParticipantService(store),
+		invitations,
+		service.NewUserService(store),
+		interviews,
+		cfg.MaxUploadMB,
+		cfg.FrontendURL,
+	)
+	apiHandler.SetBrowserAuth(browser)
 	api := router.New(
-		handler.New(
-			db,
-			service.NewAuthService(store, tokens),
-			service.NewJobService(store),
-			service.NewQuestionService(store),
-			service.NewParticipantService(store),
-			invitations,
-			service.NewUserService(store),
-			interviews,
-			cfg.MaxUploadMB,
-			cfg.FrontendURL,
-		),
+		apiHandler,
 		tokens,
 		cfg.FrontendURL,
 	)

@@ -22,12 +22,22 @@ func New(h *handler.Handler, tokens security.ITokenManager, frontendURL string) 
 	spec := openapi.New()
 	router.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer, middleware.Compress(5))
 	router.Use(cors(frontendURL))
-	router.Use(mw.TenantSchemaMiddleware(h.Db()))
+	router.Use(mw.TenantSchemaMiddleware(h.Db(), h.AppDomain()))
 	router.Use(middleware.Timeout(2 * time.Minute))
 	register(router, spec, false, http.MethodGet, "/api/openapi.json", spec.ServeHTTP,
 		openapi.Operation{Summary: "Get the current OpenAPI contract", Response: map[string]any{}, NoTenant: true})
 	register(router, spec, false, http.MethodGet, "/api/health", h.Health,
 		openapi.Operation{Summary: "Check API health", Response: map[string]string{}, NoTenant: true})
+	register(router, spec, false, http.MethodGet, "/api/auth/login", h.BeginExternalLogin,
+		openapi.Operation{Summary: "Start Go Loose browser authentication", NoTenant: true})
+	register(router, spec, false, http.MethodGet, "/api/auth/callback", h.CompleteExternalLogin,
+		openapi.Operation{Summary: "Complete Go Loose browser authentication", NoTenant: true})
+	register(router, spec, false, http.MethodGet, "/api/auth/logout", h.ExternalLogout,
+		openapi.Operation{Summary: "End the Go Loose browser session", NoTenant: true})
+	register(router, spec, false, http.MethodPost, "/api/auth/logout", h.ExternalLogout,
+		openapi.Operation{Summary: "End the Go Loose browser session", NoTenant: true})
+	register(router, spec, false, http.MethodGet, "/api/auth/session", h.ExternalSession,
+		openapi.Operation{Summary: "Exchange a Go Loose browser session for an API token", Response: webmodel.LoginResponse{}, NoTenant: true})
 	register(router, spec, false, http.MethodPost, "/api/auth/login", h.Login,
 		openapi.Operation{Summary: "Authenticate an interviewer", Request: webmodel.LoginRequest{}, Response: webmodel.LoginResponse{}})
 	register(router, spec, false, http.MethodGet, "/api/interviews/{token}", h.GetInterview,
@@ -43,7 +53,6 @@ func New(h *handler.Handler, tokens security.ITokenManager, frontendURL string) 
 	register(router, spec, false, http.MethodGet, "/api/participant-meetings/{token}/events", h.ParticipantMeetingEvents,
 		openapi.Operation{Summary: "Stream participant meeting events", Response: eventbus.InterviewEvent{}, ResponseContentType: "text/event-stream"})
 	router.Group(func(protected chi.Router) {
-		protected.Use(mw.GoLooseMiddleware())
 		protected.Use(authenticate(tokens))
 		register(protected, spec, true, http.MethodGet, "/api/jobs", h.ListJobs,
 			openapi.Operation{Summary: "List job postings", Response: []webmodel.JobResponse{}})

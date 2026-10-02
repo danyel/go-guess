@@ -64,11 +64,16 @@ Goose files in `backend/migrations` are schema-only and run in every environment
 Every entity change requires a migration plus corresponding fixture and integration
 test updates. Never put demo users or test records in schema migrations.
 
-Authentication uses bcrypt passwords and HMAC-signed bearer JWTs. Interviewer
-routes additionally require a Go Loose API key for the request tenant. Health,
-OpenAPI, login, and opaque-token participant interview routes do not. Never
-expose password hashes, CV/photo bytes, interviewer reference answers, or API
-keys in public JSON or logs.
+Authentication uses bcrypt passwords and HMAC-signed bearer JWTs. Domain routes are
+protected except `/api/health`, `/api/openapi.json`, `/api/auth/login`,
+`/api/auth/callback`, `/api/auth/logout`, `/api/auth/session`, and opaque-token
+participant interview routes. Tenant hosts `nmbs.guess.dev` and `ypto.guess.dev`
+start login with `github.com/danyel/go-loose/client`: `/api/auth/login` redirects
+to `https://<tenant>.auth.dev/connect/authorize` and Go Loose returns to
+`/api/auth/callback`. Go Loose client credentials come from uncommitted
+environment variables. Missing tenant context uses the public schema; a
+`*.guess.dev` host supplies the schema when `X-Tenant-Id` is absent. Never expose
+password hashes, CV/photo bytes, or interviewer reference answers in public JSON.
 
 Questions are permanent reusable records linked to jobs through
 `job_posting_questions`; detach links rather than deleting questions. Deprecated

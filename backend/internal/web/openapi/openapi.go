@@ -89,7 +89,6 @@ func (b *Builder) Add(method, path string, operation Operation) {
 	}
 	if operation.Protected {
 		value["security"] = []map[string][]string{{
-			"apiKeyAuth": {},
 			"bearerAuth": {},
 		}}
 	}
@@ -131,7 +130,6 @@ func (b *Builder) Document() map[string]any {
 		"paths":   b.paths,
 		"components": map[string]any{
 			"securitySchemes": map[string]any{
-				"apiKeyAuth": map[string]any{"type": "apiKey", "in": "header", "name": client.DefaultHeader},
 				"bearerAuth": map[string]any{"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
 			},
 			"schemas": b.schemas,

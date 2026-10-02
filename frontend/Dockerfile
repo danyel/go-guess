@@ -3,8 +3,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-ARG VITE_GO_LOOSE_API_KEY
-ENV VITE_GO_LOOSE_API_KEY=$VITE_GO_LOOSE_API_KEY
 RUN npm run build
 
 FROM nginx:1.29-alpine
