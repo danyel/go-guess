@@ -5,6 +5,8 @@ services:
       POSTGRES_DB: go_guess
       POSTGRES_USER: go_guess
       POSTGRES_PASSWORD: go_guess
+    networks:
+      - go_guess_network
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
@@ -17,6 +19,8 @@ services:
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
+    networks:
+      - go_guess_network
     ports:
       - "${RABBITMQ_AMQP_PORT:-5672}:5672"
       - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
@@ -36,6 +40,8 @@ services:
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
     ports:
       - "${API_PORT:-8080}:8080"
+    networks:
+      - go_guess_network
     depends_on:
       db:
         condition: service_healthy
@@ -48,7 +54,10 @@ services:
       - "${WEB_PORT:-5173}:80"
     depends_on:
       - api
-
+    networks:
+      - go_guess_network
+networks:
+  go_guess_network:
 volumes:
   postgres_data:
   postgres_data2:

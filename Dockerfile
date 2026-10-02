@@ -38,7 +38,7 @@ COPY docker/entrypoint.sh /usr/local/bin/go-guess-entrypoint
 
 USER app
 EXPOSE 8080
-ENV ADDRESS=:8081 \
+ENV ADDRESS=:8080 \
     APP_ENV=production \
     FRONTEND_URL=http://localhost:8080
 
