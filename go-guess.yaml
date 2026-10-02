@@ -1,0 +1,418 @@
+---
+# Source: go-guess/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: go-guess-secrets
+  labels:
+    helm.sh/chart: go-guess-0.1.0
+    app.kubernetes.io/name: go-guess
+    app.kubernetes.io/instance: go-guess
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+type: Opaque
+data:
+  jwt-secret: "WHkwYjF1c3oxRlU5aU1yRTQ1MEFBdmZSazVCdnJYVm5EajJyT3pHQmx3bmFmR21U"
+  database-url: "cG9zdGdyZXM6Ly9nb19ndWVzczpjVUFDQVRHRXc2c2p5OVNpd1pLVEg2ZW83eXI5V1dtMUBnby1ndWVzcy1wb3N0Z3Jlc3FsOjU0MzIvZ29fZ3Vlc3M/c3NsbW9kZT1kaXNhYmxl"
+  rabbitmq-url: "YW1xcDovL2dvX2d1ZXNzOmMxUWhKOEdEZ3ZXdzR5ZlM3UVZIa3BFd21LOGFGSnY2QGdvLWd1ZXNzLXJhYmJpdG1xOjU2NzIv"
+  postgresql-password: "Y1VBQ0FUR0V3NnNqeTlTaXdaS1RINmVvN3lyOVdXbTE="
+  rabbitmq-password: "YzFRaEo4R0Rndld3NHlmUzdRVkhrcEV3bUs4YUZKdjY="
+
+---
+# Source: go-guess/templates/app-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-guess
+  labels:
+    helm.sh/chart: go-guess-0.1.0
+    app.kubernetes.io/name: go-guess
+    app.kubernetes.io/instance: go-guess
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: go-guess
+    app.kubernetes.io/instance: go-guess
+    app.kubernetes.io/component: application
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+
+---
+# Source: go-guess/templates/postgresql-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-guess-postgresql
+  labels:
+    helm.sh/chart: go-guess-0.1.0
+    app.kubernetes.io/name: go-guess
+    app.kubernetes.io/instance: go-guess
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: postgresql
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: go-guess
+    app.kubernetes.io/instance: go-guess
+    app.kubernetes.io/component: postgresql
+  ports:
+    - name: postgresql
+      port: 5432
+      targetPort: postgresql
+
+---
+# Source: go-guess/templates/rabbitmq-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: go-guess-rabbitmq
+  labels:
+    helm.sh/chart: go-guess-0.1.0
+    app.kubernetes.io/name: go-guess
+    app.kubernetes.io/instance: go-guess
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: rabbitmq
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: go-guess
+    app.kubernetes.io/instance: go-guess
+    app.kubernetes.io/component: rabbitmq
+  ports:
+    - name: amqp
+      port: 5672
+      targetPort: amqp
+
+---
+# Source: go-guess/templates/app-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: go-guess
+  labels:
+    helm.sh/chart: go-guess-0.1.0
+    app.kubernetes.io/name: go-guess
+    app.kubernetes.io/instance: go-guess
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: go-guess
+      app.kubernetes.io/instance: go-guess
+      app.kubernetes.io/component: application
+  template:
+    metadata:
+      annotations:
+        checksum/secrets: 35d2fb3ab7972008630bcb7d33a419558d26ded80acf4454d32d2a3fcc82d721
+      labels:
+        app.kubernetes.io/name: go-guess
+        app.kubernetes.io/instance: go-guess
+        app.kubernetes.io/component: application
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 10001
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: go-guess
+          image: "batty1039.startdedicated.net:5000/go-guess-api:0.0.1"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+              - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 10001
+          env:
+            - name: APP_ENV
+              value: "production"
+            - name: FRONTEND_URL
+              value: "http://localhost:8080"
+            - name: TOKEN_TTL
+              value: "8h"
+            - name: MAX_UPLOAD_MB
+              value: "10"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: go-guess-secrets
+                  key: database-url
+            - name: RABBITMQ_URL
+              valueFrom:
+                secretKeyRef:
+                  name: go-guess-secrets
+                  key: rabbitmq-url
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: go-guess-secrets
+                  key: jwt-secret
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: temporary-files
+              mountPath: /tmp
+      volumes:
+        - name: temporary-files
+          emptyDir: {}
+
+---
+# Source: go-guess/templates/postgresql-statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: go-guess-postgresql
+  labels:
+    helm.sh/chart: go-guess-0.1.0
+    app.kubernetes.io/name: go-guess
+    app.kubernetes.io/instance: go-guess
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: postgresql
+spec:
+  serviceName: go-guess-postgresql
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: go-guess
+      app.kubernetes.io/instance: go-guess
+      app.kubernetes.io/component: postgresql
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: go-guess
+        app.kubernetes.io/instance: go-guess
+        app.kubernetes.io/component: postgresql
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 70
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: postgresql
+          image: "postgres:18-alpine"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 70
+          env:
+            - name: POSTGRES_DB
+              value: "go_guess"
+            - name: POSTGRES_USER
+              value: "go_guess"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: go-guess-secrets
+                  key: postgresql-password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgresql
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -ec
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 8Gi
+
+---
+# Source: go-guess/templates/rabbitmq-statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: go-guess-rabbitmq
+  labels:
+    helm.sh/chart: go-guess-0.1.0
+    app.kubernetes.io/name: go-guess
+    app.kubernetes.io/instance: go-guess
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: rabbitmq
+spec:
+  serviceName: go-guess-rabbitmq
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: go-guess
+      app.kubernetes.io/instance: go-guess
+      app.kubernetes.io/component: rabbitmq
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: go-guess
+        app.kubernetes.io/instance: go-guess
+        app.kubernetes.io/component: rabbitmq
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        fsGroup: 100
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: rabbitmq
+          image: "rabbitmq:4-alpine"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 100
+          env:
+            - name: RABBITMQ_DEFAULT_USER
+              value: "go_guess"
+            - name: RABBITMQ_DEFAULT_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: go-guess-secrets
+                  key: rabbitmq-password
+          ports:
+            - name: amqp
+              containerPort: 5672
+          readinessProbe:
+            exec:
+              command:
+                - rabbitmq-diagnostics
+                - -q
+                - ping
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 6
+          startupProbe:
+            exec:
+              command:
+                - rabbitmq-diagnostics
+                - -q
+                - ping
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 30
+          livenessProbe:
+            exec:
+              command:
+                - rabbitmq-diagnostics
+                - -q
+                - ping
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/rabbitmq
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 4Gi
+---
+# Source: go-guess/templates/tests/test-connection.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "go-guess-test-connection"
+  labels:
+    helm.sh/chart: go-guess-0.1.0
+    app.kubernetes.io/name: go-guess
+    app.kubernetes.io/instance: go-guess
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  containers:
+    - name: wget
+      image: busybox:1.37
+      command:
+        - wget
+      args:
+        - -qO-
+        - "http://go-guess:80/api/health"
+

@@ -1,5 +1,9 @@
 Go Guess has been installed in namespace {{ .Release.Namespace }}.
-Protected interviewer routes authorize with Go Loose at {{ .Values.app.goLooseBaseURL }}.
+{{- if .Values.goLoose.enabled }}
+Browser sign-in uses Go Loose at https://<tenant>.{{ .Values.goLoose.authDomain }}.
+{{- else }}
+Browser sign-in uses the application password login. Enable goLoose to redirect tenant hosts.
+{{- end }}
 
 {{- if .Values.ingress.enabled }}
 Open {{ .Values.app.frontendURL }}

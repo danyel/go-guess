@@ -21,7 +21,7 @@ spec:
     spec:
       automountServiceAccountToken: false
       securityContext:
-        fsGroup: 100
+        fsGroup: 101
         fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: rabbitmq

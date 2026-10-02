@@ -44,8 +44,6 @@ spec:
                 secretKeyRef:
                   name: {{ include "go-guess.secretName" . }}
                   key: postgresql-password
-            - name: PGDATA
-              value: /var/lib/postgresql/data/pgdata
           ports:
             - name: postgresql
               containerPort: 5432
@@ -69,7 +67,7 @@ spec:
             {{- toYaml .Values.postgresql.resources | nindent 12 }}
           volumeMounts:
             - name: data
-              mountPath: /var/lib/postgresql/data
+              mountPath: /var/lib/postgresql
       {{- if not .Values.postgresql.persistence.enabled }}
       volumes:
         - name: data

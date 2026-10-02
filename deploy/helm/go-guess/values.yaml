@@ -16,6 +16,16 @@ app:
   tokenTTL: 8h
   maxUploadMB: 10
 
+goLoose:
+  enabled: false
+  authDomain: auth.dev
+  appDomain: guess.dev
+  ca:
+    existingSecret: ""
+    key: ca.crt
+    mountPath: /certs/local-ca.crt
+  tenants: []
+
 secrets:
   jwtSecret: ""
   databaseURL: ""
