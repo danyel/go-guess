@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/danyel/go-loose/client"
 )
 
 type Operation struct {
@@ -86,7 +88,10 @@ func (b *Builder) Add(method, path string, operation Operation) {
 		"responses":   responses,
 	}
 	if operation.Protected {
-		value["security"] = []map[string][]string{{"bearerAuth": {}}}
+		value["security"] = []map[string][]string{{
+			"apiKeyAuth": {},
+			"bearerAuth": {},
+		}}
 	}
 	if operation.Request != nil {
 		requestContentType := operation.RequestContentType
@@ -126,6 +131,7 @@ func (b *Builder) Document() map[string]any {
 		"paths":   b.paths,
 		"components": map[string]any{
 			"securitySchemes": map[string]any{
+				"apiKeyAuth": map[string]any{"type": "apiKey", "in": "header", "name": client.DefaultHeader},
 				"bearerAuth": map[string]any{"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
 			},
 			"schemas": b.schemas,
@@ -137,7 +143,7 @@ func (b *Builder) parameters(path string, queries []string, tenantRequired bool)
 	result := make([]map[string]any, 0)
 	if tenantRequired {
 		result = append(result, map[string]any{
-			"name": "X-Tenant-Id", "in": "header", "required": true,
+			"name": client.XTenantId, "in": "header", "required": true,
 			"schema": map[string]any{"type": "string"},
 		})
 	}

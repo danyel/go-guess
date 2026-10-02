@@ -82,7 +82,7 @@ export function tenantFromHostname(hostname: string): string | null {
 export function apiBaseURL(location: Pick<Location, 'hostname' | 'protocol'>): string {
   const hostname = location.hostname.toLowerCase().replace(/\.$/, '')
   if (hostname.endsWith('.guess.local')) {
-    return `${location.protocol}//${hostname}:8080/api`
+    return '/api'
   }
   return '/api'
 }
@@ -93,7 +93,11 @@ function apiURL(path: string): string {
 
 function tenantHeader(): Record<string, string> {
   const tenant = tenantFromHostname(window.location.hostname)
-  return tenant ? { 'X-Tenant-Id': tenant } : {}
+  const apiKey = import.meta.env.VITE_GO_LOOSE_API_KEY
+  return {
+    ...(tenant ? { 'X-Tenant-Id': tenant } : {}),
+    ...(typeof apiKey === 'string' && apiKey !== '' ? { 'X-API-Key': apiKey } : {}),
+  }
 }
 
 async function request<T>(

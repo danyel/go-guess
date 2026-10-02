@@ -7,14 +7,12 @@ describe('API client', () => {
     sessionStorage.clear()
   })
 
-  it('derives the local tenant API origin from the browser hostname', () => {
+  it('uses the same-origin API behind the local HTTPS proxy', () => {
     expect(tenantFromHostname('nmbs.guess.local')).toBe('nmbs')
     expect(tenantFromHostname('ypto.guess.local')).toBe('ypto')
     expect(tenantFromHostname('localhost')).toBeNull()
     expect(tenantFromHostname('127.0.0.1')).toBeNull()
-    expect(apiBaseURL({ hostname: 'nmbs.guess.local', protocol: 'http:' })).toBe(
-      'http://nmbs.guess.local:8080/api',
-    )
+    expect(apiBaseURL({ hostname: 'nmbs.guess.local', protocol: 'https:' })).toBe('/api')
     expect(apiBaseURL({ hostname: 'app.example.com', protocol: 'https:' })).toBe('/api')
   })
 

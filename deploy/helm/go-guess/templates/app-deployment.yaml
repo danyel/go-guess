@@ -48,6 +48,8 @@ spec:
               value: {{ .Values.app.tokenTTL | quote }}
             - name: MAX_UPLOAD_MB
               value: {{ .Values.app.maxUploadMB | quote }}
+            - name: GO_LOOSE_BASE_URL
+              value: {{ .Values.app.goLooseBaseURL | quote }}
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danyel/go-loose/client"
 	"github.com/go-chi/chi/v5"
 	"gorm.io/gorm"
 
@@ -641,7 +642,7 @@ func (h *Handler) FinishInterview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) frontendURLForRequest(r *http.Request) string {
-	tenant := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Tenant-Id")))
+	tenant := strings.ToLower(strings.TrimSpace(r.Header.Get(client.XTenantId)))
 	origin := strings.TrimRight(strings.TrimSpace(r.Header.Get("Origin")), "/")
 	if tenant == "" || origin == "" {
 		return h.frontendURL

@@ -43,6 +43,7 @@ func New(h *handler.Handler, tokens security.ITokenManager, frontendURL string) 
 	register(router, spec, false, http.MethodGet, "/api/participant-meetings/{token}/events", h.ParticipantMeetingEvents,
 		openapi.Operation{Summary: "Stream participant meeting events", Response: eventbus.InterviewEvent{}, ResponseContentType: "text/event-stream"})
 	router.Group(func(protected chi.Router) {
+		protected.Use(mw.GoLooseMiddleware())
 		protected.Use(authenticate(tokens))
 		register(protected, spec, true, http.MethodGet, "/api/jobs", h.ListJobs,
 			openapi.Operation{Summary: "List job postings", Response: []webmodel.JobResponse{}})
@@ -161,7 +162,7 @@ func cors(origin string) func(http.Handler) http.Handler {
 			if allowedCORSOrigin(requestOrigin, origin) {
 				w.Header().Set("Access-Control-Allow-Origin", requestOrigin)
 			}
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Tenant-Id")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-API-Key, X-Tenant-Id")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Add("Vary", "Origin")
 			if r.Method == http.MethodOptions {

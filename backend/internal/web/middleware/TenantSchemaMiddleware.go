@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 
+	"github.com/danyel/go-loose/client"
 	"gorm.io/gorm"
 )
 
@@ -24,7 +25,7 @@ func TenantSchemaMiddleware(db *gorm.DB) func(http.Handler) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
-			tenantID := r.Header.Get("X-Tenant-Id")
+			tenantID := r.Header.Get(client.XTenantId)
 			if tenantID == "" {
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusBadRequest)

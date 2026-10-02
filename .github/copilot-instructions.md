@@ -45,10 +45,18 @@ The required toolchain is Go 1.27.1 and React 19.3 with TypeScript/Vite. Use
   Keep feature-specific components inside their feature directory. Vite proxies
   `/api` to the Go service in development.
 - Local multi-tenant URLs use `<tenant>.guess.local`. The frontend derives the
-  tenant from the hostname, calls `http://<tenant>.guess.local:8080/api`, and
+  tenant from the hostname, calls same-origin `/api` through the HTTPS proxy, and
   sends `X-Tenant-Id` on every request type. Other deployments use same-origin
   `/api`. Generated participant links must use the validated matching tenant
   origin. Keep this contract documented in `README.md` and `frontend/README.md`.
+- Protected interviewer routes also require Go Loose `X-API-Key` authorization
+  for application `guess`. The tenant passed to Go Loose comes from
+  `X-Tenant-Id`. `GO_LOOSE_BASE_URL` defaults to `https://%s.auth.dev`;
+  `%s` is that tenant and must be one DNS label. Do not require the API key on
+  `/api/health`, `/api/openapi.json`, `/api/auth/login`, or opaque-token
+  participant routes. The frontend sends the key only when
+  `VITE_GO_LOOSE_API_KEY` is present at build time. Document both variables when
+  their contract changes.
 
 Goose files in `backend/migrations` are schema-only and run in every environment.
 `internal/database/seed/common.sql` contains shared reference data;
@@ -56,10 +64,11 @@ Goose files in `backend/migrations` are schema-only and run in every environment
 Every entity change requires a migration plus corresponding fixture and integration
 test updates. Never put demo users or test records in schema migrations.
 
-Authentication uses bcrypt passwords and HMAC-signed bearer JWTs. Domain routes are
-protected except `/api/health`, `/api/auth/login`, and opaque-token participant
-interview routes. Never expose password hashes, CV/photo bytes, or interviewer
-reference answers in public JSON.
+Authentication uses bcrypt passwords and HMAC-signed bearer JWTs. Interviewer
+routes additionally require a Go Loose API key for the request tenant. Health,
+OpenAPI, login, and opaque-token participant interview routes do not. Never
+expose password hashes, CV/photo bytes, interviewer reference answers, or API
+keys in public JSON or logs.
 
 Questions are permanent reusable records linked to jobs through
 `job_posting_questions`; detach links rather than deleting questions. Deprecated

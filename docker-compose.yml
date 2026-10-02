@@ -35,13 +35,18 @@ services:
     environment:
       DATABASE_URL: postgres://go_guess:go_guess@db:5432/go_guess?sslmode=disable
       JWT_SECRET: local-development-secret-change-me-12345
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      FRONTEND_URL: ${FRONTEND_URL:-https://nmbs.guess.local}
       APP_ENV: ${APP_ENV:-development}
+      GO_LOOSE_BASE_URL: ${GO_LOOSE_BASE_URL:-https://%s.auth.dev}
+      SSL_CERT_FILE: /certs/local-ca.crt
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-    ports:
-      - "${API_PORT:-8080}:8080"
+    expose:
+      - "8080"
     networks:
       - go_guess_network
+      - local_dev_edge
+    volumes:
+      - ${LOCAL_DEV_CERTS_DIR:-/home/dnoulet/go/infrasctruture/certs}/local-ca.crt:/certs/local-ca.crt:ro
     depends_on:
       db:
         condition: service_healthy
@@ -49,15 +54,24 @@ services:
         condition: service_healthy
 
   web:
-    build: ./frontend
-    ports:
-      - "${WEB_PORT:-5173}:80"
+    build:
+      context: ./frontend
+      args:
+        VITE_GO_LOOSE_API_KEY: ${VITE_GO_LOOSE_API_KEY:-}
+    expose:
+      - "80"
     depends_on:
       - api
     networks:
-      - go_guess_network
+      go_guess_network: {}
+      local_dev_edge:
+        aliases:
+          - go-guess-web
 networks:
   go_guess_network:
+  local_dev_edge:
+    external: true
+    name: local-dev-edge
 volumes:
   postgres_data:
   postgres_data2:

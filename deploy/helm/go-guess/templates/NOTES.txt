@@ -1,4 +1,5 @@
 Go Guess has been installed in namespace {{ .Release.Namespace }}.
+Protected interviewer routes authorize with Go Loose at {{ .Values.app.goLooseBaseURL }}.
 
 {{- if .Values.ingress.enabled }}
 Open {{ .Values.app.frontendURL }}
