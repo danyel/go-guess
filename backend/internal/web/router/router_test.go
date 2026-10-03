@@ -341,6 +341,52 @@ func TestTenantHostLoginRedirectsToMatchingGoLooseClient(t *testing.T) {
 	}
 }
 
+func TestTenantHostLoginExplainsUnconfiguredGoLooseTenant(t *testing.T) {
+	h := newTestHandler(t, nil)
+	browser, err := golooseauth.New(config.GoLooseConfig{
+		AuthDomain: "auth.dev",
+		AppDomain:  "guess.dev",
+		Tenants:    map[string]config.GoLooseTenant{"nmbs": {ClientID: "glc_nmbs", ClientSecret: "secret"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.SetBrowserAuth(browser)
+	api := New(h, security.NewTokenManager("01234567890123456789012345678901", time.Hour), "http://localhost:5173")
+
+	request := httptest.NewRequest(http.MethodGet, "/api/auth/login", nil)
+	request.Host = "ypto.guess.dev"
+	response := httptest.NewRecorder()
+	api.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable ||
+		!strings.Contains(response.Body.String(), "GO_LOOSE_YPTO_CLIENT_ID") {
+		t.Fatalf("ypto login = %d %s", response.Code, response.Body.String())
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/auth/login", nil)
+	request.Host = "guess.dev"
+	response = httptest.NewRecorder()
+	api.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), "tenant") {
+		t.Fatalf("apex login = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestLoginWithoutGoLooseRegistryIsNotFound(t *testing.T) {
+	api := New(
+		newTestHandler(t, nil),
+		security.NewTokenManager("01234567890123456789012345678901", time.Hour),
+		"http://localhost:5173",
+	)
+	request := httptest.NewRequest(http.MethodGet, "/api/auth/login", nil)
+	request.Host = "nmbs.guess.dev"
+	response := httptest.NewRecorder()
+	api.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), "not enabled") {
+		t.Fatalf("login without registry = %d %s", response.Code, response.Body.String())
+	}
+}
+
 type stubDriver struct{}
 
 func (stubDriver) Open(string) (driver.Conn, error) { return stubConn{}, nil }

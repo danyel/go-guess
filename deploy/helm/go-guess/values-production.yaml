@@ -1,25 +1,45 @@
-image:
-  tag: latest
-  pullPolicy: IfNotPresent
+# Production profile: production fixtures, persistent volumes, released image
+# tags, and self-signed certificates served for https://<tenant>.guess.local.
+domain: guess.local
 
-app:
+tenants:
+  - nmbs
+  - ypto
+
+api:
   environment: production
-  frontendURL: https://goguess.urpi.be
+  image:
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+  goLoose:
+    enabled: true
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 768Mi
 
-service:
-  type: NodePort
-  nodePort: 31374
+web:
+  replicaCount: 2
+  image:
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 300m
+      memory: 128Mi
 
 ingress:
-  enabled: false
+  enabled: true
+  className: nginx
 
-resources:
-  requests:
-    cpu: 200m
-    memory: 256Mi
-  limits:
-    cpu: "1"
-    memory: 768Mi
+certManager:
+  enabled: true
 
 postgresql:
   persistence:

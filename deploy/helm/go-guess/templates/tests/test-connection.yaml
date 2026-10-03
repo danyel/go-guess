@@ -17,4 +17,11 @@ spec:
         - wget
       args:
         - -qO-
-        - "http://{{ include "go-guess.fullname" . }}:{{ .Values.service.port }}/api/health"
+        - "http://{{ include "go-guess.apiServiceName" . }}:{{ .Values.api.service.port }}/api/health"
+    - name: wget-web
+      image: busybox:1.37
+      command:
+        - wget
+      args:
+        - -qO-
+        - "http://{{ include "go-guess.webDeploymentName" . }}:{{ .Values.web.service.port }}/"

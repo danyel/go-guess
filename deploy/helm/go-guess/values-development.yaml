@@ -1,25 +1,43 @@
-image:
-  tag: latest
-  pullPolicy: Always
+# Development profile: demo fixtures, ephemeral database and broker storage, and
+# `latest` image tags. TLS still uses the chart's self-signed certificate so
+# https://<tenant>.guess.local behaves like the production profile.
+domain: guess.local
 
-app:
+tenants:
+  - nmbs
+  - ypto
+
+api:
   environment: development
-  frontendURL: http://localhost:30080
+  image:
+    tag: latest
+    pullPolicy: Always
+  goLoose:
+    enabled: true
+    authDomain: auth.dev
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      cpu: 300m
+      memory: 384Mi
 
-service:
-  type: NodePort
-  nodePort: 30080
+web:
+  replicaCount: 1
+  image:
+    tag: latest
+    pullPolicy: Always
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 96Mi
 
 ingress:
-  enabled: false
-
-resources:
-  requests:
-    cpu: 50m
-    memory: 96Mi
-  limits:
-    cpu: 300m
-    memory: 384Mi
+  enabled: true
 
 postgresql:
   persistence:

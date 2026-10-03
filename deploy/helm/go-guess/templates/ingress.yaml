@@ -1,4 +1,5 @@
 {{- if .Values.ingress.enabled }}
+{{- $webService := include "go-guess.webDeploymentName" . }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -13,23 +14,25 @@ spec:
   {{- with .Values.ingress.className }}
   ingressClassName: {{ . }}
   {{- end }}
-  {{- with .Values.ingress.tls }}
+  {{- if .Values.ingress.tls.enabled }}
   tls:
-    {{- toYaml . | nindent 4 }}
+    - hosts:
+        {{- range .Values.tenants }}
+        - {{ printf "%s.%s" . $.Values.domain | quote }}
+        {{- end }}
+      secretName: {{ include "go-guess.tlsSecretName" . }}
   {{- end }}
   rules:
-    {{- range .Values.ingress.hosts }}
-    - host: {{ .host | quote }}
+    {{- range .Values.tenants }}
+    - host: {{ printf "%s.%s" . $.Values.domain | quote }}
       http:
         paths:
-          {{- range .paths }}
-          - path: {{ .path }}
-            pathType: {{ .pathType }}
+          - path: {{ $.Values.ingress.path }}
+            pathType: {{ $.Values.ingress.pathType }}
             backend:
               service:
-                name: {{ include "go-guess.fullname" $ }}
+                name: {{ $webService }}
                 port:
-                  number: {{ $.Values.service.port }}
-          {{- end }}
+                  number: {{ $.Values.web.service.port }}
     {{- end }}
 {{- end }}

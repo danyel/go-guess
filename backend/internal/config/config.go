@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -28,6 +29,13 @@ type GoLooseConfig struct {
 type GoLooseTenant struct {
 	ClientID     string
 	ClientSecret string
+}
+
+// GoLooseCredentialEnv returns the environment variable names holding the Go
+// Loose client credentials of a tenant.
+func GoLooseCredentialEnv(slug string) (idEnv, secretEnv string) {
+	prefix := "GO_LOOSE_" + strings.ToUpper(slug)
+	return prefix + "_CLIENT_ID", prefix + "_CLIENT_SECRET"
 }
 
 func Load() (Config, error) {
@@ -62,15 +70,16 @@ func loadGoLoose() GoLooseConfig {
 		CAFile:     os.Getenv("GO_LOOSE_CA_FILE"),
 		Tenants:    map[string]GoLooseTenant{},
 	}
-	add := func(slug, idEnv, secretEnv string) {
+	add := func(slug string) {
+		idEnv, secretEnv := GoLooseCredentialEnv(slug)
 		id, secret := os.Getenv(idEnv), os.Getenv(secretEnv)
 		if id == "" || secret == "" {
 			return
 		}
 		cfg.Tenants[slug] = GoLooseTenant{ClientID: id, ClientSecret: secret}
 	}
-	add("nmbs", "GO_LOOSE_NMBS_CLIENT_ID", "GO_LOOSE_NMBS_CLIENT_SECRET")
-	add("ypto", "GO_LOOSE_YPTO_CLIENT_ID", "GO_LOOSE_YPTO_CLIENT_SECRET")
+	add("nmbs")
+	add("ypto")
 	return cfg
 }
 

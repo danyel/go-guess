@@ -7,10 +7,15 @@ BDD_COMPOSE := docker compose -f docker-compose.bdd.yml
 HELM ?= helm
 HELM_CHART := deploy/helm/go-guess
 HELM_RELEASE ?= go-guess
-HELM_NAMESPACE ?= go-guess
-KUBECONFIG ?= $(HOME)/.config/kubectl/rancher.urpi.local.yaml
+HELM_NAMESPACE ?= go-insane
+KUBECONFIG ?= $(HOME)/.kube/config
+HELM_KUBECTL := KUBECONFIG="$(KUBECONFIG)" $(HELM)
+GO_LOOSE_SET ?= --set-string api.goLoose.tenants.nmbs.clientID="$${GO_LOOSE_NMBS_CLIENT_ID:-}" \
+	--set-string api.goLoose.tenants.nmbs.clientSecret="$${GO_LOOSE_NMBS_CLIENT_SECRET:-}" \
+	--set-string api.goLoose.tenants.ypto.clientID="$${GO_LOOSE_YPTO_CLIENT_ID:-}" \
+	--set-string api.goLoose.tenants.ypto.clientSecret="$${GO_LOOSE_YPTO_CLIENT_SECRET:-}"
 
-.PHONY: help dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-bdd test-bdd-down test-env test-env-down lint build rancher-storage helm-lint helm-deploy-development helm-deploy-production helm-down-production helm-down-development
+.PHONY: help dev db-up db-down migrate migrate-down seed backend frontend frontend-install test test-backend test-frontend test-integration test-bdd test-bdd-down test-env test-env-down lint build rancher-storage ingress-nginx-install cert-manager-install cluster-prepare helm-lint helm-deploy-development helm-deploy-production helm-down-production helm-down-development
 
 help:
 	@echo "make dev        		builds the demo docker image"
@@ -33,6 +38,9 @@ help:
 	@echo "make lint      			runs lint on the frontend"
 	@echo "make build      		builds the entire project"
 	@echo "make rancher-storage		installs the persistent local-path StorageClass"
+	@echo "make ingress-nginx-install	installs the ingress-nginx controller serving 80/443"
+	@echo "make cert-manager-install	installs cert-manager for chart-issued TLS certificates"
+	@echo "make cluster-prepare		runs every cluster prerequisite in order"
 	@echo "make helm-lint			lints development and production Helm configurations"
 	@echo "make helm-deploy-development	deploys the development Helm release"
 	@echo "make helm-deploy-production	deploys the production Helm release"
@@ -104,6 +112,27 @@ build:
 rancher-storage:
 	KUBECONFIG="$(KUBECONFIG)" kubectl apply -f deploy/rancher/local-path.yaml
 
+ingress-nginx-install:
+	$(HELM_KUBECTL) repo add ingress-nginx https://kubernetes.github.io/ingress-nginx --force-update
+	$(HELM_KUBECTL) repo update
+	$(HELM_KUBECTL) upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+		--namespace ingress-nginx --create-namespace \
+		--set controller.service.type=NodePort \
+		--set controller.hostPort.enabled=true \
+		--set controller.kind=DaemonSet \
+		--set controller.admissionWebhooks.enabled=false \
+		--wait --timeout 10m
+
+cert-manager-install:
+	$(HELM_KUBECTL) repo add jetstack https://charts.jetstack.io --force-update
+	$(HELM_KUBECTL) repo update
+	$(HELM_KUBECTL) upgrade --install cert-manager jetstack/cert-manager \
+		--namespace cert-manager --create-namespace \
+		--set crds.enabled=true \
+		--wait --timeout 10m
+
+cluster-prepare: rancher-storage ingress-nginx-install cert-manager-install
+
 helm-lint:
 	KUBECONFIG="$(KUBECONFIG)" $(HELM) lint $(HELM_CHART) -f $(HELM_CHART)/values-development.yaml
 	KUBECONFIG="$(KUBECONFIG)" $(HELM) lint $(HELM_CHART) -f $(HELM_CHART)/values-production.yaml
@@ -113,17 +142,25 @@ helm-lint:
 		-f $(HELM_CHART)/values-production.yaml >/dev/null
 
 helm-deploy-development:
-	KUBECONFIG="$(KUBECONFIG)" $(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) --namespace $(HELM_NAMESPACE)-development --create-namespace -f $(HELM_CHART)/values-development.yaml --rollback-on-failure --wait --timeout 10m
+	$(HELM_KUBECTL) upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
+		--namespace $(HELM_NAMESPACE)-development --create-namespace \
+		-f $(HELM_CHART)/values-development.yaml \
+		--set secrets.postgresqlPassword="go_guess" \
+		--set secrets.rabbitmqPassword="guest" \
+		$(GO_LOOSE_SET) \
+		--rollback-on-failure --wait --timeout 10m
 
 helm-deploy-production:
-	KUBECONFIG="$(KUBECONFIG)" $(HELM) upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
+	$(HELM_KUBECTL) upgrade --install $(HELM_RELEASE) $(HELM_CHART) \
 		--namespace $(HELM_NAMESPACE)-production --create-namespace \
-		-f $(HELM_CHART)/values-production.yaml --wait --timeout 10m\
+		-f $(HELM_CHART)/values-production.yaml \
 		--set secrets.postgresqlPassword="go_guess" \
-		--set secrets.rabbitmqPassword="guest"
+		--set secrets.rabbitmqPassword="guest" \
+		$(GO_LOOSE_SET) \
+		--wait --timeout 10m
 
 helm-down-production:
-	KUBECONFIG="$(KUBECONFIG)" $(HELM) uninstall $(HELM_RELEASE) -n $(HELM_NAMESPACE)-production
+	$(HELM_KUBECTL) uninstall $(HELM_RELEASE) -n $(HELM_NAMESPACE)-production
 
 helm-down-development:
-	KUBECONFIG="$(KUBECONFIG)" $(HELM) uninstall $(HELM_RELEASE) -n $(HELM_NAMESPACE)-development
+	$(HELM_KUBECTL) uninstall $(HELM_RELEASE) -n $(HELM_NAMESPACE)-development

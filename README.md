@@ -156,24 +156,32 @@ make test-env-down
 
 ## Production image
 
-Build the complete application as a single image:
+Two images are published to the private registry: `go-guess-api:0.0.1` for the Go
+service and `go-guess-web:0.0.1` for the React front end behind nginx.
 
 ```bash
-docker build -t go-guess .
+docker build -t batty1039.startdedicated.net:5000/go-guess-api:0.0.1 ./backend
+docker build -t batty1039.startdedicated.net:5000/go-guess-web:0.0.1 ./frontend
 ```
 
-The image serves the frontend and API on port `8080`. It applies database
-migrations and shared production fixtures before startup. PostgreSQL, RabbitMQ,
-and these environment variables must be provided:
+The API image listens on `8080` and applies database migrations and shared
+fixtures before serving. The web image listens on `80`, serves the built assets,
+and proxies `/api/` to `http://api:8080`, so both containers must share a
+network with the API reachable under the DNS name `api`. PostgreSQL, RabbitMQ,
+and these environment variables must be provided to the API:
 
 ```bash
 docker run --rm -p 8080:8080 \
   -e DATABASE_URL='postgres://user:password@postgres:5432/go_guess?sslmode=disable' \
   -e RABBITMQ_URL='amqp://user:password@rabbitmq:5672/' \
   -e JWT_SECRET='replace-with-at-least-32-characters' \
-  -e FRONTEND_URL='https://go-guess.example.com' \
-  go-guess
+  -e FRONTEND_URL='https://nmbs.guess.local' \
+  batty1039.startdedicated.net:5000/go-guess-api:0.0.1
 ```
+
+The `Dockerfile` at the repository root still builds one combined image that
+serves both halves on port `8080`. It is convenient for local runs and browser
+BDD tests, while Kubernetes deploys the two images separately.
 
 Pushes to `master` publish `go-guess:latest` and `go-guess:<commit-sha>` to the
 private registry configured in `.github/workflows/publish-image.yml`. The
@@ -181,11 +189,23 @@ repository must provide `REGISTRY_USERNAME` and `REGISTRY_PASSWORD` secrets.
 
 ## Rancher and Helm
 
-The chart under `deploy/helm/go-guess` deploys the application, PostgreSQL, and
-RabbitMQ. It works with any Kubernetes cluster managed by Rancher; Rancher's free
-edition does not restrict Helm or GitHub Actions deployments.
+The chart under `deploy/helm/go-guess` deploys the API image, the web image, and
+their PostgreSQL and RabbitMQ. Every tenant gets its own HTTPS host at
+`https://<tenant>.guess.local`. The chart values are documented in
+[deploy/helm/go-guess/README.md](deploy/helm/go-guess/README.md).
 
-Validate or deploy one of the environment profiles:
+One web deployment serves every tenant host because the API resolves the tenant
+from the request `Host` header, so a new tenant is one entry in `tenants`.
+
+Install the cluster prerequisites once per cluster. Storage for persistent
+volumes, an ingress-nginx controller for the `nginx` ingress class, and
+cert-manager for the chart-issued certificate:
+
+```bash
+make cluster-prepare
+```
+
+Then validate or deploy one of the environment profiles:
 
 ```bash
 make helm-lint
@@ -193,25 +213,41 @@ make helm-deploy-development
 make helm-deploy-production
 ```
 
-For the repository's single-node Docker Rancher setup, run
-`make rancher-storage` once before the first production deployment. This
-installs the default persistent StorageClass documented in
-`rancher-install.txt`.
+Development uses `latest` images, development fixtures, and ephemeral database
+and broker storage in namespace `go-insane-development`. Production uses the
+released `0.0.1` tags, production fixtures, and persistent volumes in namespace
+`go-insane-production`.
 
-Development uses demo fixtures, ephemeral database and message-broker storage,
-and NodePort `30080`. Production uses production fixtures, persistent volumes,
-generated secrets that are preserved across upgrades, and larger resource
-limits. It exposes the application at NodePort `31374` for the dedicated-server
-Nginx proxy while PostgreSQL and RabbitMQ remain cluster-internal. The public
-URL is `https://goguess.urpi.be`; one.com DNS, Nginx, Certbot, firewall, and
-verification instructions are in `deploy/nginx/README.md`.
+Certificates are self-signed and issued by the chart, so every browser or client
+that opens a tenant host needs the CA from the release:
+
+```bash
+kubectl -n go-insane-production get secret go-guess-web-ca \
+  -o jsonpath='{.data.ca\.crt}' | base64 -d > go-guess-ca.crt
+```
+
+Point each tenant host at the ingress controller address, then open
+`https://nmbs.guess.local` and `https://ypto.guess.local`. Browser sign-in
+through Go Loose needs the per-tenant client credentials; pass them from the
+environment to `make helm-deploy-production`:
+
+```bash
+export GO_LOOSE_NMBS_CLIENT_ID=... GO_LOOSE_NMBS_CLIENT_SECRET=...
+export GO_LOOSE_YPTO_CLIENT_ID=... GO_LOOSE_YPTO_CLIENT_SECRET=...
+```
+
+Without credentials for a tenant, that host keeps password login. The cluster
+served by `~/.kube/config` is managed by Rancher at `rancher.urpi.be`, which is
+the management interface and not the deployment target. One.com DNS, Nginx,
+Certbot, and firewall instructions for the single-node dedicated server are in
+`deploy/nginx/README.md`.
 
 To use external managed services, disable the bundled StatefulSets and provide
 full connection URLs:
 
 ```bash
 helm upgrade --install go-guess deploy/helm/go-guess \
-  --namespace go-guess-production --create-namespace \
+  --namespace go-insane-production --create-namespace \
   -f deploy/helm/go-guess/values-production.yaml \
   --set postgresql.enabled=false \
   --set rabbitmq.enabled=false \
@@ -229,8 +265,8 @@ workflow succeeds. Create GitHub environments named `development` and
 - Secrets `REGISTRY_USERNAME`, `REGISTRY_PASSWORD`, and
   `GO_GUESS_JWT_SECRET`.
 - Variable `RANCHER_NAMESPACE` for the target namespace.
-- Optional variable `GO_GUESS_FRONTEND_URL` when overriding an environment's
-  configured public URL.
+- Optional secrets `GO_LOOSE_NMBS_CLIENT_ID`, `GO_LOOSE_NMBS_CLIENT_SECRET`,
+  `GO_LOOSE_YPTO_CLIENT_ID`, and `GO_LOOSE_YPTO_CLIENT_SECRET`.
 
 Because the configured image registry uses HTTP, every Rancher cluster node must
 trust `batty1039.startdedicated.net:5000` as an insecure registry. Use HTTPS for

@@ -1,17 +1,48 @@
-Go Guess has been installed in namespace {{ .Release.Namespace }}.
-{{- if .Values.goLoose.enabled }}
-Browser sign-in uses Go Loose at https://<tenant>.{{ .Values.goLoose.authDomain }}.
-{{- else }}
-Browser sign-in uses the application password login. Enable goLoose to redirect tenant hosts.
+Go Guess is installed in namespace {{ .Release.Namespace }}.
+
+Components:
+  API      service/{{ include "go-guess.apiServiceName" . }}:{{ .Values.api.service.port }} (cluster-internal)
+  Web      service/{{ include "go-guess.webDeploymentName" . }}:{{ .Values.web.service.port }}
+  Ingress  {{ if .Values.ingress.enabled }}class {{ if .Values.ingress.className }}{{ .Values.ingress.className }}{{ else }}default{{ end }}{{ else }}disabled{{ end }}
+{{ if .Values.ingress.enabled }}
+Tenant URLs:
+{{- range .Values.tenants }}
+  {{ if $.Values.ingress.tls.enabled }}https{{ else }}http{{ end }}://{{ printf "%s.%s" . $.Values.domain }}
 {{- end }}
 
-{{- if .Values.ingress.enabled }}
-Open {{ .Values.app.frontendURL }}
-{{- else if eq .Values.service.type "NodePort" }}
-The application is exposed on cluster node port {{ .Values.service.nodePort }}.
-Open {{ .Values.app.frontendURL }} through the external reverse proxy.
+Point every tenant host at the ingress controller address, for example in
+/etc/hosts:
+{{- range .Values.tenants }}
+  <ingress-controller-ip>  {{ printf "%s.%s" . $.Values.domain }}
+{{- end }}
+{{- if and .Values.ingress.tls.enabled .Values.certManager.enabled (not .Values.ingress.tls.existingSecret) }}
+
+The certificate is self-signed, so trust the chart CA in every browser or client
+that opens these hosts:
+  kubectl -n {{ .Release.Namespace }} get secret {{ include "go-guess.certManagerCASecretName" . }} \
+    -o jsonpath='{.data.ca\.crt}' | base64 -d > go-guess-ca.crt
+{{- end }}
+{{- if .Values.api.goLoose.enabled }}
+
+Browser sign-in redirects to https://<tenant>.{{ .Values.api.goLoose.authDomain }}:
+{{- range $tenant, $credentials := .Values.api.goLoose.tenants }}
+{{- if and $credentials.clientID $credentials.clientSecret }}
+  {{ $tenant }}: Go Loose browser sign-in
 {{- else }}
+  {{ $tenant }}: no client credentials configured, password login only
+{{- end }}
+{{- end }}
+{{- else }}
+
+Browser sign-in uses the application password login.
+{{- end }}
+{{- else if and (eq .Values.web.service.type "NodePort") .Values.web.service.nodePort }}
+
+The web Service is exposed on cluster node port {{ .Values.web.service.nodePort }}.
+{{- else }}
+
 Run:
-  kubectl -n {{ .Release.Namespace }} port-forward service/{{ include "go-guess.fullname" . }} 8080:{{ .Values.service.port }}
+  kubectl -n {{ .Release.Namespace }} port-forward service/{{ include "go-guess.webDeploymentName" . }} 8080:{{ .Values.web.service.port }}
+
 Then open http://127.0.0.1:8080.
 {{- end }}

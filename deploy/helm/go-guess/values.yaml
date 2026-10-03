@@ -1,30 +1,142 @@
 nameOverride: ""
 fullnameOverride: ""
 
-replicaCount: 1
+# Public application domain. Every tenant is served from https://<tenant>.<domain>.
+domain: guess.local
 
-image:
-  repository: batty1039.startdedicated.net:5000/go-guess
-  tag: latest
-  pullPolicy: IfNotPresent
+# Tenant slugs. Each one gets its own ingress host and TLS SAN.
+tenants:
+  - nmbs
+  - ypto
 
 imagePullSecrets: []
 
-app:
-  environment: production
-  frontendURL: http://localhost:8080
+api:
+  replicaCount: 1
+  image:
+    repository: batty1039.startdedicated.net:5000/go-guess-api
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+  environment: development
+  # Public base URL used when building invitation and meeting links. Defaults to
+  # https://<first tenant>.<domain> when empty.
+  frontendURL: ""
   tokenTTL: 8h
   maxUploadMB: 10
+  service:
+    # The web image proxies /api/ to the literal upstream name "api:8080", so this
+    # Service name has to stay "api" unless the web image is rebuilt.
+    name: api
+    type: ClusterIP
+    port: 8080
+  goLoose:
+    enabled: false
+    authDomain: auth.dev
+    ca:
+      # Mount an internal CA bundle and point GO_LOOSE_CA_FILE at it.
+      existingSecret: ""
+      key: ca.crt
+      mountPath: /certs/local-ca.crt
+    # Per-tenant browser authentication credentials, written to the release secret.
+    tenants:
+      nmbs:
+        clientID: ""
+        clientSecret: ""
+      ypto:
+        clientID: ""
+        clientSecret: ""
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  podAnnotations: {}
+  podLabels: {}
+  # The image runs as its own "app" user (uid 100), so no uid is forced here:
+  # runAsNonRoot then validates whatever the image declares.
+  podSecurityContext: {}
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+    runAsNonRoot: true
+  # The API container applies migrations and seeds before serving, so old pods must
+  # be gone before the new one starts.
+  strategy:
+    type: Recreate
 
-goLoose:
-  enabled: false
-  authDomain: auth.dev
-  appDomain: guess.dev
-  ca:
+web:
+  replicaCount: 2
+  image:
+    repository: batty1039.startdedicated.net:5000/go-guess-web
+    tag: "0.0.1"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+    nodePort: null
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 300m
+      memory: 128Mi
+  podAnnotations: {}
+  podLabels: {}
+  # nginx workers run as uid 101, which the image already declares.
+  podSecurityContext: {}
+  # nginx binds the privileged port 80 and forks workers as the nginx user, so it
+  # needs the root user plus a small capability set and writable scratch paths.
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+      add:
+        - CHOWN
+        - SETGID
+        - SETUID
+        - NET_BIND_SERVICE
+    readOnlyRootFilesystem: false
+    runAsNonRoot: false
+    runAsUser: 0
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 10m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  path: /
+  pathType: Prefix
+  tls:
+    enabled: true
+    # Use a certificate you already manage instead of the chart-issued one.
     existingSecret: ""
-    key: ca.crt
-    mountPath: /certs/local-ca.crt
-  tenants: []
+    # Defaults to <fullname>-web-tls when empty and certManager.enabled is true.
+    secretName: ""
+
+certManager:
+  # Requires cert-manager in the cluster: make cert-manager-install.
+  enabled: true
+  # Reuse an existing cert-manager issuer instead of creating a self-signed one.
+  issuerRef: {}
+  duration: 8760h
+  renewBefore: 720h
+  caSecretName: ""
 
 secrets:
   jwtSecret: ""
@@ -32,49 +144,6 @@ secrets:
   rabbitmqURL: ""
   postgresqlPassword: ""
   rabbitmqPassword: ""
-
-service:
-  type: ClusterIP
-  port: 80
-  nodePort: null
-
-ingress:
-  enabled: false
-  className: nginx
-  annotations: {}
-  hosts:
-    - host: go-guess.local
-      paths:
-        - path: /
-          pathType: Prefix
-  tls: []
-
-resources:
-  requests:
-    cpu: 100m
-    memory: 128Mi
-  limits:
-    cpu: 500m
-    memory: 512Mi
-
-podAnnotations: {}
-podLabels: {}
-
-podSecurityContext:
-  fsGroup: 10001
-  fsGroupChangePolicy: OnRootMismatch
-
-securityContext:
-  allowPrivilegeEscalation: false
-  capabilities:
-    drop:
-      - ALL
-  readOnlyRootFilesystem: true
-  runAsNonRoot: true
-  runAsUser: 10001
-
-strategy:
-  type: Recreate
 
 postgresql:
   enabled: true
