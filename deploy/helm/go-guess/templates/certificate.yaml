@@ -1,0 +1,76 @@
+{{- if and .Values.ingress.enabled .Values.ingress.tls.enabled .Values.certManager.enabled }}
+{{- $fullname := include "go-guess.fullname" . }}
+{{- $caSecret := include "go-guess.certManagerCASecretName" . }}
+{{- $tlsSecret := include "go-guess.tlsSecretName" . }}
+{{- if not .Values.certManager.issuerRef }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $fullname }}-selfsigned
+  labels:
+    {{- include "go-guess.labels" . | nindent 4 }}
+    app.kubernetes.io/component: certificate
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $fullname }}-web-ca
+  labels:
+    {{- include "go-guess.labels" . | nindent 4 }}
+    app.kubernetes.io/component: certificate
+spec:
+  secretName: {{ $caSecret }}
+  commonName: {{ printf "%s-ca" $fullname }}
+  duration: {{ .Values.certManager.duration }}
+  renewBefore: {{ .Values.certManager.renewBefore }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  issuerRef:
+    name: {{ $fullname }}-selfsigned
+    kind: Issuer
+    group: cert-manager.io
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ $fullname }}-web-ca
+  labels:
+    {{- include "go-guess.labels" . | nindent 4 }}
+    app.kubernetes.io/component: certificate
+spec:
+  ca:
+    secretName: {{ $caSecret }}
+---
+{{- end }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $fullname }}-web
+  labels:
+    {{- include "go-guess.labels" . | nindent 4 }}
+    app.kubernetes.io/component: certificate
+spec:
+  secretName: {{ $tlsSecret }}
+  duration: {{ .Values.certManager.duration }}
+  renewBefore: {{ .Values.certManager.renewBefore }}
+  privateKey:
+    algorithm: ECDSA
+    size: 256
+  usages:
+    - server auth
+  dnsNames:
+    {{- range .Values.tenants }}
+    - {{ printf "%s.%s" . $.Values.domain | quote }}
+    {{- end }}
+  issuerRef:
+    {{- if .Values.certManager.issuerRef }}
+    {{- include "go-guess.certManagerIssuerRef" . | nindent 4 }}
+    {{- else }}
+    name: {{ $fullname }}-web-ca
+    kind: Issuer
+    group: cert-manager.io
+    {{- end }}
+{{- end }}
