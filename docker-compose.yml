@@ -38,8 +38,8 @@ services:
       JWT_SECRET: local-development-secret-change-me-12345
       FRONTEND_URL: ${FRONTEND_URL:-https://nmbs.guess.local}
       APP_ENV: ${APP_ENV:-development}
-      GO_LOOSE_AUTH_DOMAIN: auth.dev
-      GO_LOOSE_APP_DOMAIN: guess.dev
+      GO_LOOSE_AUTH_DOMAIN: ${GO_LOOSE_AUTH_DOMAIN:-auth.dev}
+      GO_LOOSE_APP_DOMAIN: ${GO_LOOSE_APP_DOMAIN:-guess.dev}
       GO_LOOSE_CA_FILE: /certs/local-ca.crt
       GO_LOOSE_NMBS_CLIENT_ID: ${GO_LOOSE_NMBS_CLIENT_ID:-}
       GO_LOOSE_NMBS_CLIENT_SECRET: ${GO_LOOSE_NMBS_CLIENT_SECRET:-}
