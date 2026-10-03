@@ -3,7 +3,7 @@
 set -eu
 
 github_url='https://github.com/danyel/go-guess.git'
-forgejo_url='https://forgejo.dev/exr462/go-guess.git'
+forgejo_url='https://forgejo.urpi.be/exr462/go-guess.git'
 remote='origin'
 
 current_url=$(git remote get-url "$remote")
