@@ -55,8 +55,9 @@ curl --fail https://goguess.urpi.be/api/health
 The `go-guess` service should show `80:31374/TCP`. The PostgreSQL and RabbitMQ
 services should remain `ClusterIP` services without NodePorts.
 
-Protected interviewer routes also call Go Loose from the application pod, using
-`app.goLooseBaseURL` (default `https://%s.auth.dev`, where `%s` is the
-request tenant). That address must be reachable from the cluster. The browser
-forwards browser authentication and API requests without adding application
-credentials. Nginx does not add or strip authorization headers.
+Browser sign-in also calls Go Loose from the application pod, using
+`GO_LOOSE_AUTH_DOMAIN` (`auth-dev.urpi.be` outside production, `auth.urpi.be` in
+production) as `https://<tenant>.<GO_LOOSE_AUTH_DOMAIN>`. That address must be
+reachable from the pod. The browser forwards browser authentication and API
+requests without adding application credentials. Nginx does not add or strip
+authorization headers.

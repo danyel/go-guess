@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/danyel/go-guess/backend/internal/config"
 	"github.com/danyel/go-loose/client"
 )
 
@@ -79,8 +80,22 @@ func TestGoLooseMiddlewareRejectsMissingTenantAndKey(t *testing.T) {
 	}
 }
 
+func TestGoLooseMiddlewareDefaultsToTheDevelopmentIdentityDomain(t *testing.T) {
+	t.Setenv("GO_LOOSE_BASE_URL", "")
+	baseURL, err := goLooseBaseURL(defaultBaseURLPattern(), "nmbs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if baseURL != "https://nmbs."+config.DefaultAuthDomain {
+		t.Fatalf("default base URL = %q", baseURL)
+	}
+	if defaultBaseURLPattern() != "https://%s.auth-dev.urpi.be" {
+		t.Fatalf("default pattern = %q", defaultBaseURLPattern())
+	}
+}
+
 func TestGoLooseMiddlewareRejectsUnsafeTenantInHost(t *testing.T) {
-	t.Setenv("GO_LOOSE_BASE_URL", "https://%s.auth.dev")
+	t.Setenv("GO_LOOSE_BASE_URL", "https://%s.auth-dev.urpi.be")
 	handler := GoLooseMiddleware()(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
 		t.Fatal("handler reached for unsafe tenant")
 	}))

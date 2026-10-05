@@ -8,6 +8,10 @@ type User struct {
 	PasswordHash string
 	DisplayName  string
 	Role         string
+	// AvatarURL is the picture Go Loose serves for this person. It is resolved
+	// from the identity provider on every sign-in rather than stored, because a
+	// stored key stops resolving once the picture is replaced or removed.
+	AvatarURL string
 }
 
 type Trait struct {

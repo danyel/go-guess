@@ -21,6 +21,9 @@ type User struct {
 	Email       string `json:"email"`
 	DisplayName string `json:"displayName"`
 	Role        string `json:"role"`
+	// AvatarURL is an absolute, publicly fetchable picture URL served by Go Loose,
+	// or an empty string when the person has not uploaded one.
+	AvatarURL string `json:"avatarUrl"`
 }
 
 type CreateUserRequest struct {

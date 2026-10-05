@@ -1,3 +1,4 @@
+# Production values for go-guess
 nameOverride: ""
 fullnameOverride: ""
 
@@ -23,20 +24,16 @@ api:
     runAsNonRoot: true
     runAsUser: 100
     runAsGroup: 100
-  replicaCount: 1
+  replicaCount: 2
   image:
     repository: batty1039.startdedicated.net:5000/go-guess-api
-    tag: "0.0.1"
-    pullPolicy: IfNotPresent
-  environment: development
-  # Public base URL used when building invitation and meeting links. Defaults to
-  # https://<first tenant>.<domain> when empty.
+    tag: "latest"
+    pullPolicy: Always
+  environment: production
   frontendURL: ""
   tokenTTL: 8h
   maxUploadMB: 10
   service:
-    # The web image proxies /api/ to the literal upstream name "api:8080", so this
-    # Service name has to stay "api" unless the web image is rebuilt.
     name: api
     type: ClusterIP
     port: 8080
@@ -44,11 +41,9 @@ api:
     enabled: true
     authDomain: auth.urpi.be
     ca:
-      # Mount an internal CA bundle and point GO_LOOSE_CA_FILE at it.
       existingSecret: ""
       key: ca.crt
       mountPath: /certs/local-ca.crt
-    # Per-tenant browser authentication credentials, written to the release secret.
     tenants:
       nmbs:
         clientID: ""
@@ -58,39 +53,39 @@ api:
         clientSecret: ""
   resources:
     requests:
-      cpu: 50m
-      memory: 128Mi
+      cpu: 100m
+      memory: 256Mi
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 1000m
+      memory: 1Gi
   podAnnotations: {}
   podLabels: {}
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
 
 web:
   replicaCount: 2
   image:
     repository: batty1039.startdedicated.net:5000/go-guess-web
-    tag: "0.0.1"
-    pullPolicy: IfNotPresent
+    tag: "latest"
+    pullPolicy: Always
   service:
     type: ClusterIP
     port: 80
     nodePort: null
   resources:
     requests:
-      cpu: 25m
-      memory: 32Mi
+      cpu: 50m
+      memory: 64Mi
     limits:
-      cpu: 300m
-      memory: 128Mi
+      cpu: 500m
+      memory: 256Mi
   podAnnotations: {}
   podLabels: {}
-  # nginx workers run as uid 101, which the image already declares.
   podSecurityContext: {}
-  # nginx binds the privileged port 80 and forks workers as the nginx user, so it
-  # needs the root user plus a small capability set and writable scratch paths.
   securityContext:
     allowPrivilegeEscalation: false
     capabilities:
@@ -119,20 +114,19 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-prod
   path: /
   pathType: Prefix
   tls:
     enabled: true
-    # Use a certificate you already manage instead of the chart-issued one.
     existingSecret: ""
-    # Defaults to <fullname>-web-tls when empty and certManager.enabled is true.
     secretName: ""
 
 certManager:
-  # Requires cert-manager in the cluster: make cert-manager-install.
   enabled: true
-  # Reuse an existing cert-manager issuer instead of creating a self-signed one.
-  issuerRef: {}
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
   duration: 8760h
   renewBefore: 720h
   caSecretName: ""
@@ -155,15 +149,15 @@ postgresql:
     database: go_guess
   persistence:
     enabled: true
-    size: 8Gi
+    size: 20Gi
     storageClass: ""
   resources:
     requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
+      cpu: 200m
       memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
 
 rabbitmq:
   enabled: true
@@ -175,15 +169,15 @@ rabbitmq:
     username: go_guess
   persistence:
     enabled: true
-    size: 4Gi
+    size: 10Gi
     storageClass: ""
   resources:
     requests:
-      cpu: 100m
-      memory: 128Mi
-    limits:
-      cpu: 500m
+      cpu: 200m
       memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
 
 nodeSelector: {}
 tolerations: []

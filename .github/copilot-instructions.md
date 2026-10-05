@@ -44,19 +44,15 @@ The required toolchain is Go 1.27.1 and React 19.3 with TypeScript/Vite. Use
   domain types, and `src/styles/global.css` contains application-wide styles.
   Keep feature-specific components inside their feature directory. Vite proxies
   `/api` to the Go service in development.
-- Local multi-tenant URLs use `<tenant>.guess.local`. The frontend derives the
-  tenant from the hostname, calls same-origin `/api` through the HTTPS proxy, and
-  sends `X-Tenant-Id` on every request type. Other deployments use same-origin
-  `/api`. Generated participant links must use the validated matching tenant
-  origin. Keep this contract documented in `README.md` and `frontend/README.md`.
-- Protected interviewer routes also require Go Loose `X-API-Key` authorization
-  for application `guess`. The tenant passed to Go Loose comes from
-  `X-Tenant-Id`. `GO_LOOSE_BASE_URL` defaults to `https://%s.auth.dev`;
-  `%s` is that tenant and must be one DNS label. Do not require the API key on
-  `/api/health`, `/api/openapi.json`, `/api/auth/login`, or opaque-token
-  participant routes. The frontend sends the key only when
-  `VITE_GO_LOOSE_API_KEY` is present at build time. Document both variables when
-  their contract changes.
+- Multi-tenant URLs use `<tenant>.<app domain>`, where the app domain is
+  `guess-dev.urpi.be` in local development and the Kubernetes development
+  profile, and `guess.urpi.be` in production. The frontend derives the tenant from
+  the hostname, calls same-origin `/api` through the HTTPS proxy, and sends
+  `X-Tenant-Id` on every request type. Generated participant links must use the
+  validated matching tenant origin. Keep this contract documented in `README.md`
+  and `frontend/README.md`.
+- Protected interviewer routes require a bearer JWT only. Go Loose is used for
+  browser login, not for API-key authorization.
 
 Goose files in `backend/migrations` are schema-only and run in every environment.
 `internal/database/seed/common.sql` contains shared reference data;
@@ -67,13 +63,19 @@ test updates. Never put demo users or test records in schema migrations.
 Authentication uses bcrypt passwords and HMAC-signed bearer JWTs. Domain routes are
 protected except `/api/health`, `/api/openapi.json`, `/api/auth/login`,
 `/api/auth/callback`, `/api/auth/logout`, `/api/auth/session`, and opaque-token
-participant interview routes. Tenant hosts `nmbs.guess.dev` and `ypto.guess.dev`
-start login with `github.com/danyel/go-loose/client`: `/api/auth/login` redirects
-to `https://<tenant>.auth.dev/connect/authorize` and Go Loose returns to
-`/api/auth/callback`. Go Loose client credentials come from uncommitted
-environment variables. Missing tenant context uses the public schema; a
-`*.guess.dev` host supplies the schema when `X-Tenant-Id` is absent. Never expose
-password hashes, CV/photo bytes, or interviewer reference answers in public JSON.
+participant interview routes. Any tenant host starts browser login with
+`github.com/danyel/go-loose/client`: `/api/auth/login` redirects to
+`https://<tenant>.<GO_LOOSE_AUTH_DOMAIN>/connect/authorize` and Go Loose returns to
+`/api/auth/callback`. `GO_LOOSE_AUTH_DOMAIN` is `auth-dev.urpi.be` locally and in
+the development profile, and `auth.urpi.be` in production; `GO_LOOSE_APP_DOMAIN`
+is the matching application domain. Both default to the development domains.
+`GET /api/auth/session` answers `404` when no Go Loose login is configured for the
+request host, and the frontend uses that to fall back to the password form instead
+of redirecting. Go Loose client credentials come from uncommitted environment
+variables. The tenant comes from `X-Tenant-Id`, or from the request host and
+`X-Forwarded-Host` when the header is absent; missing tenant context uses the
+public schema. Never expose password hashes, CV/photo bytes, or interviewer
+reference answers in public JSON.
 
 Questions are permanent reusable records linked to jobs through
 `job_posting_questions`; detach links rather than deleting questions. Deprecated

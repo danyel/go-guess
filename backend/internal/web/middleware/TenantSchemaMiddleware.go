@@ -28,7 +28,7 @@ func TenantSchemaMiddleware(db *gorm.DB, appDomain string) func(http.Handler) ht
 			}
 			tenantID := r.Header.Get(client.XTenantId)
 			if tenantID == "" {
-				tenantID = golooseauth.TenantFromHost(r.Host, appDomain)
+				tenantID = golooseauth.TenantFromHost(golooseauth.Host(r), appDomain)
 			}
 			if tenantID == "" || db == nil {
 				next.ServeHTTP(w, r)

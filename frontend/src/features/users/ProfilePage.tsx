@@ -1,5 +1,6 @@
 import { Mail, ShieldCheck, UserRound } from 'lucide-react'
 import { authStorage } from '../../api/client'
+import { Avatar } from '../../components/ui/Avatar'
 
 export function ProfilePage() {
   const user = authStorage.user()
@@ -14,9 +15,8 @@ export function ProfilePage() {
       </header>
       <section className="card profile-card">
         <div className="profile-identity">
-          <span className="avatar profile-avatar" aria-hidden="true">
-            {user.displayName.slice(0, 2).toUpperCase()}
-          </span>
+          {/* The picture Go Loose serves, with the initials as the fallback. */}
+          <Avatar user={user} size="large" className="profile-avatar" />
           <div>
             <h1>{user.displayName}</h1>
             <span className={`status status-${user.role}`}>{user.role}</span>

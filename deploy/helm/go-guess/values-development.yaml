@@ -1,7 +1,7 @@
 # Development profile: demo fixtures, ephemeral database and broker storage, and
-# `latest` image tags. TLS still uses the chart's self-signed certificate so
-# https://<tenant>.guess.local behaves like the production profile.
-domain: guess.local
+# `latest` image tags. Browser sign-in goes through the development identity
+# domain auth-dev.urpi.be, never the production auth.urpi.be.
+domain: guess-dev.urpi.be
 
 tenants:
   - nmbs
@@ -14,7 +14,7 @@ api:
     pullPolicy: Always
   goLoose:
     enabled: true
-    authDomain: auth.dev
+    authDomain: auth-dev.urpi.be
   resources:
     requests:
       cpu: 50m

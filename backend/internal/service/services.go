@@ -28,7 +28,7 @@ const CandidateThreshold = 60.0
 
 type IAuthService interface {
 	Login(context.Context, string, string) (string, model.User, error)
-	EstablishExternalSession(context.Context, string, string) (string, model.User, error)
+	EstablishExternalSession(context.Context, ExternalIdentity) (string, model.User, error)
 }
 
 type IJobService interface {
@@ -89,9 +89,19 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (string
 	return token, user, nil
 }
 
-func (s *AuthService) EstablishExternalSession(ctx context.Context, email, displayName string) (string, model.User, error) {
-	email = strings.ToLower(strings.TrimSpace(email))
-	displayName = strings.TrimSpace(displayName)
+// ExternalIdentity is what Go Loose reports about the person signing in. The
+// avatar URL is deliberately not persisted: Go Loose retires a picture key when
+// the picture changes, so a stored copy would eventually point at nothing. It is
+// read from the live identity on every session instead.
+type ExternalIdentity struct {
+	Email       string
+	DisplayName string
+	AvatarURL   string
+}
+
+func (s *AuthService) EstablishExternalSession(ctx context.Context, identity ExternalIdentity) (string, model.User, error) {
+	email := strings.ToLower(strings.TrimSpace(identity.Email))
+	displayName := strings.TrimSpace(identity.DisplayName)
 	if email == "" {
 		return "", model.User{}, ErrValidation
 	}
@@ -116,6 +126,7 @@ func (s *AuthService) EstablishExternalSession(ctx context.Context, email, displ
 		return "", model.User{}, err
 	}
 	user.PasswordHash = ""
+	user.AvatarURL = strings.TrimSpace(identity.AvatarURL)
 	return token, user, nil
 }
 

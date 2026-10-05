@@ -1,5 +1,5 @@
 SHELL := /bin/sh
-
+REGISTRY_IMAGE ?= batty1039.startdedicated.net:5000/go-tell
 DATABASE_URL ?= postgres://go_guess:go_guess@localhost:5432/go_guess?sslmode=disable
 JWT_SECRET ?= local-development-secret-change-me-12345
 GOOSE := cd backend && go run github.com/pressly/goose/v3/cmd/goose@v3.26.0
@@ -37,6 +37,9 @@ help:
 	@echo "make test-env-down      	stops the test image"
 	@echo "make lint      			runs lint on the frontend"
 	@echo "make build      		builds the entire project"
+	@echo "make docker     		build the all-in-one image"
+	@echo "make docker-push		build and push the image to the private registry"
+	@echo "make docker-run 		run the image on :8080"
 	@echo "make rancher-storage		installs the persistent local-path StorageClass"
 	@echo "make ingress-nginx-install	installs the ingress-nginx controller serving 80/443"
 	@echo "make cert-manager-install	installs cert-manager for chart-issued TLS certificates"
@@ -108,6 +111,17 @@ lint:
 build:
 	cd backend && go build ./...
 	cd frontend && npm run build
+
+docker:
+	docker build -t $(IMAGE):$(TAG) .
+
+docker-push: docker
+	docker tag $(IMAGE):$(TAG) $(REGISTRY_IMAGE):$(TAG)
+	docker push $(REGISTRY_IMAGE):$(TAG)
+
+docker-run:
+	docker run --rm -p 8080:8080 --env-file .env $(IMAGE):$(TAG)
+
 
 rancher-storage:
 	KUBECONFIG="$(KUBECONFIG)" kubectl apply -f deploy/rancher/local-path.yaml

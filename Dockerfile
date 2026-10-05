@@ -37,6 +37,7 @@ COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/entrypoint.sh /usr/local/bin/go-guess-entrypoint
 
 USER app
+USER 1000
 EXPOSE 8080
 ENV ADDRESS=:8081 \
     APP_ENV=production \

@@ -9,6 +9,7 @@ import (
 
 	"github.com/danyel/go-guess/backend/internal/config"
 	"github.com/danyel/go-guess/backend/internal/golooseauth"
+	"github.com/danyel/go-guess/backend/internal/service"
 	webmapper "github.com/danyel/go-guess/backend/internal/web/mapper"
 	webmodel "github.com/danyel/go-guess/backend/internal/web/model"
 )
@@ -26,7 +27,7 @@ func (h *Handler) SetBrowserAuth(auth *golooseauth.Registry) {
 
 func (h *Handler) AppDomain() string {
 	if h.browser == nil {
-		return "guess.dev"
+		return config.DefaultAppDomain
 	}
 	return h.browser.AppDomain()
 }
@@ -74,13 +75,24 @@ func (h *Handler) ExternalSession(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusForbidden, errTenantMismatch)
 			return
 		}
-		token, local, err := h.auth.EstablishExternalSession(r.Context(), user.Email, user.DisplayName)
+		token, local, err := h.auth.EstablishExternalSession(r.Context(), externalIdentity(user))
 		if err != nil {
 			internalError(w, r, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, webmodel.LoginResponse{Token: token, User: webmapper.UserToWeb(local)})
 	})).ServeHTTP(w, r)
+}
+
+// externalIdentity is what Go Loose reports about the person signing in. The
+// picture URL is carried through rather than looked up: Go Loose serves it
+// publicly, so the browser can render it without another round trip.
+func externalIdentity(user goloose.User) service.ExternalIdentity {
+	return service.ExternalIdentity{
+		Email:       user.Email,
+		DisplayName: user.DisplayName,
+		AvatarURL:   user.AvatarURL,
+	}
 }
 
 func (h *Handler) externalAuth(r *http.Request) (*goloose.BrowserAuth, bool) {
@@ -92,7 +104,7 @@ func (h *Handler) externalAuthWithSlug(r *http.Request) (*goloose.BrowserAuth, s
 	if h.browser == nil {
 		return nil, "", false
 	}
-	return h.browser.ForHost(r.Host)
+	return h.browser.ForHost(golooseauth.Host(r))
 }
 
 func writeExternalAuthError(w http.ResponseWriter, h *Handler, slug string) {

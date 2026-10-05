@@ -653,8 +653,10 @@ func (h *Handler) frontendURLForRequest(r *http.Request) string {
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return h.frontendURL
 	}
-	if strings.EqualFold(parsed.Hostname(), tenant+".guess.local") ||
-		strings.EqualFold(parsed.Hostname(), tenant+".guess.dev") {
+	// Only trust the Origin when it is the browser origin of the requesting
+	// tenant, so an invitation link cannot be pointed at another host.
+	if strings.EqualFold(parsed.Hostname(), tenant+"."+h.AppDomain()) ||
+		strings.EqualFold(parsed.Hostname(), tenant+".guess.local") {
 		return origin
 	}
 	return h.frontendURL

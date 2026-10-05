@@ -21,32 +21,45 @@ make dev
 ```
 
 `docker compose up -d --build` serves the UI through the local Traefik edge at
-<https://nmbs.guess.dev> and <https://ypto.guess.dev>. Add the hostnames once:
+<https://nmbs.guess-dev.urpi.be> and <https://ypto.guess-dev.urpi.be>. Browser
+sign-in goes through the development Go Loose installation at
+<https://nmbs.auth-dev.urpi.be>. Both domains must resolve to the local edge:
 
 ```text
-127.0.0.1 nmbs.guess.dev ypto.guess.dev
-127.0.0.1 auth.dev nmbs.auth.dev ypto.auth.dev
+127.0.0.1 nmbs.guess-dev.urpi.be ypto.guess-dev.urpi.be
+127.0.0.1 nmbs.auth-dev.urpi.be ypto.auth-dev.urpi.be
 ```
 
+Production uses `guess.urpi.be` and `auth.urpi.be` instead. `GO_LOOSE_AUTH_DOMAIN`
+and `GO_LOOSE_APP_DOMAIN` select the pair; both default to the development
+domains so a local run never touches the production identity provider.
+
 Start the shared TLS proxy described in
-`/home/dnoulet/go/infrasctruture/docs/APPLICATIONS.md`, then open
-<https://nmbs.guess.dev> or <https://ypto.guess.dev>. The hostname's first
-label is the tenant ID: the frontend calls same-origin `/api` and sends the same value in the
-`X-Tenant-Id` header on JSON, multipart, file-download, and event-stream
-requests. The backend uses that tenant ID as the isolated PostgreSQL schema and
-builds participant invitation and meeting links from the matching tenant browser
-origin instead of the static localhost fallback.
+`/home/dnoulet/go/infrastructure/docs/APPLICATIONS.md`, then open
+<https://nmbs.guess-dev.urpi.be> or <https://ypto.guess-dev.urpi.be>. The
+hostname's first label is the tenant ID: the frontend calls same-origin `/api` and
+sends the same value in the `X-Tenant-Id` header on JSON, multipart,
+file-download, and event-stream requests. The backend uses that tenant ID as the
+isolated PostgreSQL schema and builds participant invitation and meeting links
+from the matching tenant browser origin instead of the static localhost fallback.
 
 Compose mounts the infrastructure CA from
-`${LOCAL_CA_FILE:-../infrastructure/certs/local-ca.crt}` into the API. The
-browser is redirected through the matching Go Loose tenant and returns to
-`/api/auth/callback`. Set the per-tenant `GO_LOOSE_*_CLIENT_ID` and
-`GO_LOOSE_*_CLIENT_SECRET` variables in the environment; never commit them.
+`${LOCAL_CA_FILE:-../infrastructure/certs/local-ca.crt}` into the API at
+`/certs/local-ca.crt`, which `GO_LOOSE_CA_FILE` points at so the API trusts the
+local Traefik certificate. The browser is redirected through the matching Go Loose
+tenant and returns to `/api/auth/callback`. Set the per-tenant
+`GO_LOOSE_*_CLIENT_ID` and `GO_LOOSE_*_CLIENT_SECRET` variables in the
+environment; never commit them.
 
 Sign in with:
 
 - Email: `interviewer@ypto.local`
 - Password: `admin123`
+
+Those credentials are only for hosts without Go Loose login. When Go Loose
+client credentials are configured, the frontend exchanges the Go Loose session
+for a JWT silently and redirects to the identity provider instead of showing the
+password form.
 
 To run the applications outside containers:
 
@@ -60,7 +73,8 @@ make frontend
 
 The API listens on port `8080` inside Docker and is exposed to browsers only
 through Traefik and the frontend's same-origin `/api` proxy. Vite permits the
-documented local tenant hostnames; the API CORS policy permits `*.guess.local` development origins and
+documented local tenant hostnames; the API CORS policy permits the configured
+tenant domain and `*.guess.local` development origins and
 the `Authorization` and `X-Tenant-Id` request headers. Non-local
 deployments keep using same-origin `/api`. Set a different secure `JWT_SECRET`
 outside local development.
@@ -68,7 +82,7 @@ outside local development.
 ## API contract
 
 The backend exposes its current OpenAPI 3.0 contract at
-<https://nmbs.guess.dev/api/openapi.json>. The document is assembled in memory
+<https://nmbs.guess-dev.urpi.be/api/openapi.json>. The document is assembled in memory
 from the same typed registrations that add routes to Chi, including request and
 response schemas, status codes, authentication, tenant headers, path/query
 parameters, multipart uploads, downloads, and event streams. It therefore
@@ -78,16 +92,24 @@ requires no generation command and cannot miss a newly registered route.
 tenant header. Every other route declares required `X-Tenant-Id`. Protected
 operations also declare bearer authentication.
 
-## Go Loose authorization
+## Go Loose browser login
 
-Tenant hosts start browser authentication at `GET /api/auth/login`. Go Loose
+Tenant hosts start browser authentication at `GET /api/auth/login`. The API
+redirects to `https://<tenant>.<GO_LOOSE_AUTH_DOMAIN>/connect/authorize`; Go Loose
 returns to `/api/auth/callback`, and `GET /api/auth/session` exchanges the
-resulting secure browser session for the application's bearer JWT. The tenant
-is derived from the request host, or from `X-Tenant-Id` for API calls.
+resulting secure browser session for the application's bearer JWT. The tenant is
+derived from the request host, or from `X-Forwarded-Host` when an ingress proxy
+replaces it, and from `X-Tenant-Id` for API calls.
 
-Compose configures `GO_LOOSE_AUTH_DOMAIN`, `GO_LOOSE_APP_DOMAIN`,
-`GO_LOOSE_CA_FILE`, and per-tenant client ID and secret variables. These routes
-do not require a JWT:
+| Environment | `GO_LOOSE_AUTH_DOMAIN` | `GO_LOOSE_APP_DOMAIN` |
+| --- | --- | --- |
+| Local development | `auth-dev.urpi.be` | `guess-dev.urpi.be` |
+| Kubernetes development | `auth-dev.urpi.be` | `guess-dev.urpi.be` |
+| Production | `auth.urpi.be` | `guess.urpi.be` |
+
+Those two variables, `GO_LOOSE_CA_FILE`, and per-tenant client ID and secret
+variables are configured by Compose and by the chart. These routes do not
+require a JWT:
 
 - `GET /api/health` and `GET /api/openapi.json`
 - browser login, callback, logout, and session routes under `/api/auth`
@@ -97,6 +119,13 @@ do not require a JWT:
 
 Login and participant routes still require `X-Tenant-Id`. Health and OpenAPI do
 not. Browser authentication routes derive the tenant from the configured host.
+
+The frontend decides whether to attempt browser login from the host it is served
+on, then asks the API whether Go Loose is configured there: `GET /api/auth/session`
+answers `404` for any host without a Go Loose login, which is the signal to show
+the password form instead of redirecting. A `401` means Go Loose is configured and
+the browser has no valid session yet, so the frontend redirects to
+`GET /api/auth/login`.
 
 ## Switch the Git remote
 
@@ -175,7 +204,7 @@ docker run --rm -p 8080:8080 \
   -e DATABASE_URL='postgres://user:password@postgres:5432/go_guess?sslmode=disable' \
   -e RABBITMQ_URL='amqp://user:password@rabbitmq:5672/' \
   -e JWT_SECRET='replace-with-at-least-32-characters' \
-  -e FRONTEND_URL='https://nmbs.guess.local' \
+  -e FRONTEND_URL='https://nmbs.guess-dev.urpi.be' \
   batty1039.startdedicated.net:5000/go-guess-api:0.0.1
 ```
 
@@ -191,7 +220,8 @@ repository must provide `REGISTRY_USERNAME` and `REGISTRY_PASSWORD` secrets.
 
 The chart under `deploy/helm/go-guess` deploys the API image, the web image, and
 their PostgreSQL and RabbitMQ. Every tenant gets its own HTTPS host at
-`https://<tenant>.guess.local`. The chart values are documented in
+`https://<tenant>.guess.urpi.be` in production and
+`https://<tenant>.guess-dev.urpi.be` in the development profile. The chart values are documented in
 [deploy/helm/go-guess/README.md](deploy/helm/go-guess/README.md).
 
 One web deployment serves every tenant host because the API resolves the tenant
@@ -227,7 +257,7 @@ kubectl -n go-insane-production get secret go-guess-web-ca \
 ```
 
 Point each tenant host at the ingress controller address, then open
-`https://nmbs.guess.local` and `https://ypto.guess.local`. Browser sign-in
+`https://nmbs.guess.urpi.be` and `https://ypto.guess.urpi.be`. Browser sign-in
 through Go Loose needs the per-tenant client credentials; pass them from the
 environment to `make helm-deploy-production`:
 
@@ -275,8 +305,9 @@ the registry in production when possible.
 ## Architecture
 
 Requests enter the Chi router and web handlers under `backend/internal/web`.
-Tenant isolation runs first. The protected interviewer group then applies Go
-Loose API-key authorization and JWT authentication.
+Tenant isolation runs first. The protected interviewer group then requires a
+bearer JWT, issued either by `POST /api/auth/login` or by exchanging a Go Loose
+browser session.
 Web request/response models are translated to service models before business logic
 runs. Services own validation, CV trait extraction, and candidate scoring. The
 repository maps service models to GORM entities and persists them in PostgreSQL.

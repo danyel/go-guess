@@ -31,6 +31,20 @@ type GoLooseTenant struct {
 	ClientSecret string
 }
 
+const (
+	// DefaultAuthDomain is the Go Loose identity domain used for local
+	// development. Production signs in through DefaultProdAuthDomain.
+	DefaultAuthDomain = "auth-dev.urpi.be"
+	// DefaultProdAuthDomain is the Go Loose identity domain used in production.
+	DefaultProdAuthDomain = "auth.urpi.be"
+	// DefaultAppDomain is the public application domain used for local
+	// development, matching deploy/helm/go-guess/values-dev.yaml.
+	DefaultAppDomain = "guess-dev.urpi.be"
+	// DefaultProdAppDomain is the public application domain used in production,
+	// matching deploy/helm/go-guess/values.yaml.
+	DefaultProdAppDomain = "guess.urpi.be"
+)
+
 // GoLooseCredentialEnv returns the environment variable names holding the Go
 // Loose client credentials of a tenant.
 func GoLooseCredentialEnv(slug string) (idEnv, secretEnv string) {
@@ -63,10 +77,17 @@ func Load() (Config, error) {
 	return cfg, nil
 }
 
+// loadGoLoose reads the Go Loose browser login configuration. Both domains are
+// single host suffixes: a tenant named "nmbs" signs in through
+// https://nmbs.<AuthDomain> and is served from https://nmbs.<AppDomain>.
+//
+// The defaults are the development domains, matching the rest of the local
+// defaults in Load. Production deployments set GO_LOOSE_AUTH_DOMAIN and
+// GO_LOOSE_APP_DOMAIN explicitly (see deploy/helm/go-guess/values.yaml).
 func loadGoLoose() GoLooseConfig {
 	cfg := GoLooseConfig{
-		AuthDomain: env("GO_LOOSE_AUTH_DOMAIN", "auth.dev"),
-		AppDomain:  env("GO_LOOSE_APP_DOMAIN", "guess.dev"),
+		AuthDomain: env("GO_LOOSE_AUTH_DOMAIN", DefaultAuthDomain),
+		AppDomain:  env("GO_LOOSE_APP_DOMAIN", DefaultAppDomain),
 		CAFile:     os.Getenv("GO_LOOSE_CA_FILE"),
 		Tenants:    map[string]GoLooseTenant{},
 	}

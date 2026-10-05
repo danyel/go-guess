@@ -11,10 +11,17 @@ import (
 	"sync"
 	"time"
 
+	"github.com/danyel/go-guess/backend/internal/config"
 	"github.com/danyel/go-loose/client"
 )
 
 const guessApplication = "guess"
+
+// defaultBaseURLPattern is the Go Loose identity domain used when
+// GO_LOOSE_BASE_URL is unset.
+func defaultBaseURLPattern() string {
+	return "https://%s." + config.DefaultAuthDomain
+}
 
 // A tenant used in the Go Loose host must be one DNS label.
 var safeTenantLabel = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,62})?$`)
@@ -23,11 +30,12 @@ var safeTenantLabel = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9_-]{0,62})?$`
 // from the X-Tenant-Id header, not from process configuration.
 //
 // GO_LOOSE_BASE_URL may contain one %s placeholder for that tenant. The
-// default is https://%s.auth.dev. A URL without %s is used as-is.
+// default is the development identity domain, https://%s.auth-dev.urpi.be.
+// A URL without %s is used as-is.
 func GoLooseMiddleware() func(http.Handler) http.Handler {
 	pattern := os.Getenv("GO_LOOSE_BASE_URL")
 	if pattern == "" {
-		pattern = "https://%s.auth.dev"
+		pattern = defaultBaseURLPattern()
 	}
 	httpClient := &http.Client{Timeout: 2 * time.Second}
 	var (

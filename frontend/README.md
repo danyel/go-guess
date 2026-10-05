@@ -36,14 +36,18 @@ application shell.
 
 ## API integration
 
-For local tenant hosts such as `nmbs.guess.dev`, `src/api/client.ts` derives
-tenant `nmbs`, calls same-origin `/api` through the shared HTTPS proxy, and sends
+For tenant hosts such as `nmbs.guess-dev.urpi.be` locally and
+`nmbs.guess.urpi.be` in production, `src/api/client.ts` derives tenant `nmbs`,
+calls same-origin `/api` through the shared HTTPS proxy, and sends
 `X-Tenant-Id: nmbs` on every JSON, multipart, file-download, and event-stream
-request. `ypto.guess.dev` behaves identically for tenant `ypto`. Other
+request. `ypto.guess-dev.urpi.be` behaves identically for tenant `ypto`. Other
 hostnames use same-origin `/api`; Vite retains its `/api` proxy for that case.
 
-On the configured tenant hosts, the app checks `/api/auth/session` and redirects
-to `/api/auth/login` when no Go Loose browser session exists. The callback
+`src/components/actions/Account.tsx` treats any host whose first DNS label is a
+tenant as a possible Go Loose host and asks `/api/auth/session` whether browser
+login is available there. A `404` means the API has no Go Loose login for the
+host, so the password form is shown; any other unauthenticated answer means Go
+Loose is configured and the app redirects to `/api/auth/login`. The callback
 exchanges that session for the bearer token used by the typed API client.
 Invitation and participant-meeting URLs use the validated request origin so
 links stay on the tenant hostname. Copy actions fall back to a temporary selected
@@ -53,7 +57,7 @@ Login stores the returned JWT in
 `sessionStorage`; protected requests send it as `Authorization: Bearer <token>`. API failures are
 shown in the UI and are never replaced with demo data. A `401` from a protected
 JSON, file, or event-stream request clears authentication and returns the user to
-`/login`. On `nmbs.guess.dev` and `ypto.guess.dev`, the app restores
+`/login`. On a tenant host with Go Loose configured, the app restores
 `/api/auth/session` or redirects to `/api/auth/login`; participant routes stay
 token-based. The app also schedules logout from the JWT expiration claim so an idle
 expired session cannot remain on a protected page.

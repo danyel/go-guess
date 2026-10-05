@@ -13,7 +13,7 @@ export function AuthenticatedApp({onLogout}: { onLogout: () => void }) {
         <div className="app-shell">
             <GoGuessHeader setOpen={setOpen} open={open} onLogout={onLogout}/>
             <main className="main-content">
-                <WorkspaceUtilities user={user}/>
+                <WorkspaceUtilities user={user} onSignOut={onLogout}/>
                 <ApplicationRoutes/>
                 <AppFooter/>
             </main>

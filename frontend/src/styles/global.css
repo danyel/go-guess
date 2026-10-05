@@ -2802,3 +2802,117 @@ fieldset {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* Account menu.
+   The trigger sits in the utilities bar and the panel is anchored to it, so the
+   panel is positioned against a relatively positioned wrapper rather than the
+   viewport: it must stay with its trigger when the utilities bar wraps. */
+.user-menu {
+  position: relative;
+}
+.user-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 40px;
+  padding: 0.3rem 0.7rem 0.3rem 0.35rem;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font: inherit;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+.user-menu-trigger:hover,
+.user-menu-trigger:focus-visible {
+  border-color: var(--line);
+  background: var(--surface);
+}
+.user-menu-trigger:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+.user-menu-identity {
+  display: grid;
+  line-height: 1.2;
+}
+.user-menu-name {
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+.user-menu-email {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.user-menu-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 30;
+  min-width: 16rem;
+  padding: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+}
+.user-menu-header {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.6rem 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 0.4rem;
+}
+.user-menu-header p {
+  margin: 0;
+}
+.user-menu-panel-name {
+  font-weight: 700;
+}
+.user-menu-panel-email {
+  font-size: 0.78rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+  cursor: pointer;
+}
+.user-menu-item:hover,
+.user-menu-item:focus-visible {
+  background: #eef6f7;
+}
+.user-menu-item:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+}
+.user-menu-panel + .user-menu-item {
+  margin-top: 0.15rem;
+}
+@media (max-width: 720px) {
+  /* The sidebar carries the same actions on a narrow screen, so the menu keeps
+     only the picture and its accessible name. */
+  .user-menu-identity {
+    display: none;
+  }
+  .user-menu-trigger {
+    padding: 0.3rem;
+  }
+}

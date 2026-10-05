@@ -21,7 +21,7 @@ func New(h *handler.Handler, tokens security.ITokenManager, frontendURL string) 
 	router := chi.NewRouter()
 	spec := openapi.New()
 	router.Use(middleware.RequestID, middleware.RealIP, middleware.Recoverer, middleware.Compress(5))
-	router.Use(cors(frontendURL))
+	router.Use(cors(frontendURL, h.AppDomain()))
 	router.Use(mw.TenantSchemaMiddleware(h.Db(), h.AppDomain()))
 	router.Use(middleware.Timeout(2 * time.Minute))
 	register(router, spec, false, http.MethodGet, "/api/openapi.json", spec.ServeHTTP,
@@ -164,11 +164,11 @@ func authenticate(tokens security.ITokenManager) func(http.Handler) http.Handler
 	}
 }
 
-func cors(origin string) func(http.Handler) http.Handler {
+func cors(origin, appDomain string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestOrigin := r.Header.Get("Origin")
-			if allowedCORSOrigin(requestOrigin, origin) {
+			if allowedCORSOrigin(requestOrigin, origin, appDomain) {
 				w.Header().Set("Access-Control-Allow-Origin", requestOrigin)
 			}
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-API-Key, X-Tenant-Id")
@@ -183,7 +183,11 @@ func cors(origin string) func(http.Handler) http.Handler {
 	}
 }
 
-func allowedCORSOrigin(requestOrigin, configuredOrigin string) bool {
+// allowedCORSOrigin accepts the configured frontend origin plus any tenant host
+// of the configured application domain, which is what the Vite dev server on
+// http://<tenant>.<appDomain>:5173 sends. *.guess.local stays allowed for the
+// offline BDD and local password-only setups.
+func allowedCORSOrigin(requestOrigin, configuredOrigin, appDomain string) bool {
 	if requestOrigin == "" {
 		return false
 	}
@@ -194,5 +198,11 @@ func allowedCORSOrigin(requestOrigin, configuredOrigin string) bool {
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") {
 		return false
 	}
-	return strings.HasSuffix(strings.ToLower(parsed.Hostname()), ".guess.local")
+	hostname := strings.ToLower(parsed.Hostname())
+	for _, suffix := range []string{"." + appDomain, ".guess.local"} {
+		if suffix != "." && strings.HasSuffix(hostname, suffix) {
+			return true
+		}
+	}
+	return false
 }

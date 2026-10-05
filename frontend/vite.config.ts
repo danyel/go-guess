@@ -4,7 +4,14 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [react()],
   server: {
-    allowedHosts: ['nmbs.guess.local', 'ypto.guess.local'],
+    allowedHosts: [
+      'nmbs.guess-dev.urpi.be',
+      'ypto.guess-dev.urpi.be',
+      'nmbs.guess.urpi.be',
+      'ypto.guess.urpi.be',
+      'nmbs.guess.local',
+      'ypto.guess.local',
+    ],
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

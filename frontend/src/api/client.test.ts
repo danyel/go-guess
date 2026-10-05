@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { api, apiBaseURL, authStorage, SESSION_EXPIRED_EVENT, tenantFromHostname } from './client'
+import { api, authStorage, SESSION_EXPIRED_EVENT, tenantFromHostname } from './client'
 import { subscribeToDomainEvent } from './domainEvents'
 
 describe('API client', () => {
@@ -8,12 +8,11 @@ describe('API client', () => {
   })
 
   it('uses the same-origin API behind the local HTTPS proxy', () => {
-    expect(tenantFromHostname('nmbs.guess.local')).toBe('nmbs')
-    expect(tenantFromHostname('ypto.guess.local')).toBe('ypto')
+    expect(tenantFromHostname('nmbs.guess-dev.urpi.be')).toBe('nmbs')
+    expect(tenantFromHostname('ypto.guess-dev.urpi.be')).toBe('ypto')
+    expect(tenantFromHostname('nmbs.guess.urpi.be')).toBe('nmbs')
     expect(tenantFromHostname('localhost')).toBeNull()
     expect(tenantFromHostname('127.0.0.1')).toBeNull()
-    expect(apiBaseURL({ hostname: 'nmbs.guess.local', protocol: 'https:' })).toBe('/api')
-    expect(apiBaseURL({ hostname: 'app.example.com', protocol: 'https:' })).toBe('/api')
   })
 
   it('sends the persisted bearer token on protected requests', async () => {

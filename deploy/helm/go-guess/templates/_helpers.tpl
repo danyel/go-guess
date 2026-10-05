@@ -53,7 +53,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- default "api" .Values.api.service.name }}
 {{- end }}
 
-{{/* Host serving one tenant, for example nmbs.guess.local. */}}
+{{/* Host serving one tenant, for example nmbs.guess.urpi.be. */}}
 {{- define "go-guess.tenantHost" -}}
 {{- printf "%s.%s" (index . 0) (index . 1) }}
 {{- end }}
@@ -81,7 +81,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{/* Cluster-scoped by default so one issuer signs every tenant release. */}}
 {{- define "go-guess.certManagerIssuerRef" -}}
 {{- if .Values.certManager.issuerRef }}
-toYaml .Values.certManager.issuerRef
+{{- toYaml .Values.certManager.issuerRef | nindent 4 }}
 {{- else }}
 name: selfsigned
 kind: Issuer

@@ -36,10 +36,10 @@ services:
     environment:
       DATABASE_URL: postgres://go_guess:go_guess@db:5432/go_guess?sslmode=disable
       JWT_SECRET: local-development-secret-change-me-12345
-      FRONTEND_URL: ${FRONTEND_URL:-https://nmbs.guess.local}
+      FRONTEND_URL: ${FRONTEND_URL:-https://nmbs.guess-dev.urpi.be}
       APP_ENV: ${APP_ENV:-development}
-      GO_LOOSE_AUTH_DOMAIN: ${GO_LOOSE_AUTH_DOMAIN:-auth.dev}
-      GO_LOOSE_APP_DOMAIN: ${GO_LOOSE_APP_DOMAIN:-guess.dev}
+      GO_LOOSE_AUTH_DOMAIN: ${GO_LOOSE_AUTH_DOMAIN:-auth-dev.urpi.be}
+      GO_LOOSE_APP_DOMAIN: ${GO_LOOSE_APP_DOMAIN:-guess-dev.urpi.be}
       GO_LOOSE_CA_FILE: /certs/local-ca.crt
       GO_LOOSE_NMBS_CLIENT_ID: ${GO_LOOSE_NMBS_CLIENT_ID:-}
       GO_LOOSE_NMBS_CLIENT_SECRET: ${GO_LOOSE_NMBS_CLIENT_SECRET:-}
@@ -52,7 +52,7 @@ services:
       - go_guess_network
       - local_dev_edge
     volumes:
-      - ${LOCAL_CA_FILE:-../infrastructure/certs/local-ca.crt}:/certs/local-ca.crt:ro
+      - ${LOCAL_CA_FILE:-/home/dnoulet/go/infrastructure/certs/local-ca.crt}:/certs/local-ca.crt:ro
     depends_on:
       db:
         condition: service_healthy

@@ -25,8 +25,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      args:
-        VITE_GO_LOOSE_API_KEY: gl_bdd_key_that_is_long_enough_for_client
     environment:
       DATABASE_URL: postgres://go_guess:go_guess@db:5432/go_guess?sslmode=disable&search_path=ypto
       JWT_SECRET: bdd-test-secret-that-is-at-least-32-characters

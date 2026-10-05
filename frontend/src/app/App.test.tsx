@@ -258,10 +258,17 @@ describe('Go Guess frontend', () => {
       'href',
       '/invitations',
     )
-    expect(within(accountNavigation).getByRole('link', { name: 'Admin' })).toHaveAttribute(
+    // The person is reached through the account menu rather than a bare profile
+    // link, so the menu trigger names them and holds the actions.
+    const menu = within(accountNavigation).getByRole('button', { name: /Admin/ })
+    expect(menu).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(menu)
+    expect(within(accountNavigation).getByRole('link', { name: 'Profile' })).toHaveAttribute(
       'href',
       '/profile',
     )
+    expect(within(accountNavigation).getByRole('button', { name: 'Sign out' })).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
 
     const primaryNavigation = screen.getByRole('navigation', { name: 'Primary navigation' })
     expect(
@@ -329,7 +336,10 @@ describe('Go Guess frontend', () => {
     renderApp('/participants/3')
 
     const input = await screen.findByLabelText(/replace cv/i)
-    await user.upload(input, new File(['replacement'], 'replacement.pdf', { type: 'application/pdf' }))
+    await user.upload(
+      input,
+      new File(['replacement'], 'replacement.pdf', { type: 'application/pdf' }),
+    )
 
     expect(await screen.findByText('React')).toBeInTheDocument()
     expect(fetch).toHaveBeenCalledWith(

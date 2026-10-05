@@ -1,6 +1,6 @@
 # Production profile: production fixtures, persistent volumes, released image
-# tags, and self-signed certificates served for https://<tenant>.guess.local.
-domain: guess.local
+# tags, and self-signed certificates served for https://<tenant>.guess.urpi.be.
+domain: guess.urpi.be
 
 tenants:
   - nmbs

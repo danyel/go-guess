@@ -2,7 +2,7 @@
 
 This chart deploys Go Guess as two images, an API and a web front end, plus its
 own PostgreSQL and RabbitMQ, and publishes one HTTPS host per tenant under
-`https://<tenant>.guess.local`.
+`https://<tenant>.guess.urpi.be`.
 
 ## 1. What the chart creates
 
@@ -75,7 +75,7 @@ command that exports the CA certificate. With the local platform, prefer
 `tenants` is the list of slugs and `domain` is the shared parent domain:
 
 ```yaml
-domain: guess.local
+domain: guess.urpi.be
 tenants:
   - nmbs
   - ypto
@@ -83,8 +83,8 @@ tenants:
 
 The chart derives, without any extra configuration:
 
-- `GO_LOOSE_APP_DOMAIN=guess.local`, so the API accepts `nmbs.guess.local` and
-  `ypto.guess.local` as tenant hosts.
+- `GO_LOOSE_APP_DOMAIN=<domain>`, so the API accepts `nmbs.<domain>` and
+  `ypto.<domain>` as tenant hosts.
 - One ingress rule per tenant, all pointing at `go-guess-web`.
 - One certificate SAN per tenant, so a single secret covers every host.
 - `FRONTEND_URL`, when `api.frontendURL` is empty, as
@@ -107,7 +107,7 @@ sign-in is used.
 |---|---|---|
 | `nameOverride` | `""` | Overrides the chart name in resource names and labels |
 | `fullnameOverride` | `""` | Replaces the generated resource name prefix |
-| `domain` | `guess.local` | Parent domain of every tenant host |
+| `domain` | `guess.urpi.be` | Parent domain of every tenant host. `guess-dev.urpi.be` in the development profile |
 | `tenants` | `[nmbs, ypto]` | Tenant slugs served by the release |
 | `imagePullSecrets` | `[]` | Pull secrets added to both pods |
 
@@ -126,8 +126,8 @@ sign-in is used.
 | `api.service.name` | `api` | Service DNS name, fixed by the web image |
 | `api.service.type` | `ClusterIP` | API service type |
 | `api.service.port` | `8080` | API service port |
-| `api.goLoose.enabled` | `false` | Enables Go Loose browser sign-in |
-| `api.goLoose.authDomain` | `auth.dev` | Tenant login host `https://<tenant>.<authDomain>` |
+| `api.goLoose.enabled` | `true` | Enables Go Loose browser sign-in |
+| `api.goLoose.authDomain` | `auth.urpi.be` | Tenant login host `https://<tenant>.<authDomain>`. `auth-dev.urpi.be` in the development profile |
 | `api.goLoose.ca.existingSecret` | `""` | Secret holding the Go Loose CA bundle |
 | `api.goLoose.ca.key` | `ca.crt` | Key projected from that secret |
 | `api.goLoose.ca.mountPath` | `/certs/local-ca.crt` | `GO_LOOSE_CA_FILE` target |
@@ -264,8 +264,8 @@ kubectl -n go-insane-production get ingress go-guess
 kubectl -n go-insane-production get certificate
 kubectl -n go-insane-production rollout status deployment/go-guess-api
 kubectl -n go-insane-production rollout status deployment/go-guess-web
-curl --resolve nmbs.guess.local:443:127.0.0.1 --cacert go-guess-ca.crt \
-  https://nmbs.guess.local/api/health
+curl --resolve nmbs.guess.urpi.be:443:127.0.0.1 --cacert go-guess-ca.crt \
+  https://nmbs.guess.urpi.be/api/health
 ```
 
 The test pod installed by `helm test` checks the API health endpoint and the web

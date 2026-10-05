@@ -94,6 +94,7 @@ func InvitationToWeb(value servicemodel.Invitation, frontendURL string) webmodel
 func UserToWeb(value servicemodel.User) webmodel.User {
 	return webmodel.User{
 		ID: value.ID, Email: value.Email, DisplayName: value.DisplayName, Role: value.Role,
+		AvatarURL: value.AvatarURL,
 	}
 }
 

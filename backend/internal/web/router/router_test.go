@@ -69,7 +69,7 @@ func (authStub) Login(context.Context, string, string) (string, model.User, erro
 	return "", model.User{}, service.ErrInvalidCredentials
 }
 
-func (authStub) EstablishExternalSession(context.Context, string, string) (string, model.User, error) {
+func (authStub) EstablishExternalSession(context.Context, service.ExternalIdentity) (string, model.User, error) {
 	return "", model.User{}, service.ErrInvalidCredentials
 }
 
@@ -313,8 +313,8 @@ func TestOpenAPIDoesNotRequireTenant(t *testing.T) {
 func TestTenantHostLoginRedirectsToMatchingGoLooseClient(t *testing.T) {
 	h := newTestHandler(t, nil)
 	browser, err := golooseauth.New(config.GoLooseConfig{
-		AuthDomain: "auth.dev",
-		AppDomain:  "guess.dev",
+		AuthDomain: config.DefaultAuthDomain,
+		AppDomain:  config.DefaultAppDomain,
 		Tenants: map[string]config.GoLooseTenant{
 			"nmbs": {ClientID: "glc_nmbs", ClientSecret: "secret"},
 			"ypto": {ClientID: "glc_ypto", ClientSecret: "secret"},
@@ -328,14 +328,14 @@ func TestTenantHostLoginRedirectsToMatchingGoLooseClient(t *testing.T) {
 
 	for _, slug := range []string{"nmbs", "ypto"} {
 		request := httptest.NewRequest(http.MethodGet, "/api/auth/login", nil)
-		request.Host = slug + ".guess.dev"
+		request.Host = slug + ".guess-dev.urpi.be"
 		response := httptest.NewRecorder()
 		api.ServeHTTP(response, request)
 		location := response.Header().Get("Location")
-		if response.Code != http.StatusFound || !strings.HasPrefix(location, "https://"+slug+".auth.dev/connect/authorize?") {
+		if response.Code != http.StatusFound || !strings.HasPrefix(location, "https://"+slug+".auth-dev.urpi.be/connect/authorize?") {
 			t.Fatalf("%s login redirect = %d %s", slug, response.Code, location)
 		}
-		if !strings.Contains(location, "redirect_uri=https%3A%2F%2F"+slug+".guess.dev%2Fapi%2Fauth%2Fcallback") {
+		if !strings.Contains(location, "redirect_uri=https%3A%2F%2F"+slug+".guess-dev.urpi.be%2Fapi%2Fauth%2Fcallback") {
 			t.Fatalf("%s callback missing from %s", slug, location)
 		}
 	}
@@ -344,8 +344,8 @@ func TestTenantHostLoginRedirectsToMatchingGoLooseClient(t *testing.T) {
 func TestTenantHostLoginExplainsUnconfiguredGoLooseTenant(t *testing.T) {
 	h := newTestHandler(t, nil)
 	browser, err := golooseauth.New(config.GoLooseConfig{
-		AuthDomain: "auth.dev",
-		AppDomain:  "guess.dev",
+		AuthDomain: config.DefaultAuthDomain,
+		AppDomain:  config.DefaultAppDomain,
 		Tenants:    map[string]config.GoLooseTenant{"nmbs": {ClientID: "glc_nmbs", ClientSecret: "secret"}},
 	})
 	if err != nil {
@@ -355,7 +355,7 @@ func TestTenantHostLoginExplainsUnconfiguredGoLooseTenant(t *testing.T) {
 	api := New(h, security.NewTokenManager("01234567890123456789012345678901", time.Hour), "http://localhost:5173")
 
 	request := httptest.NewRequest(http.MethodGet, "/api/auth/login", nil)
-	request.Host = "ypto.guess.dev"
+	request.Host = "ypto.guess-dev.urpi.be"
 	response := httptest.NewRecorder()
 	api.ServeHTTP(response, request)
 	if response.Code != http.StatusServiceUnavailable ||
@@ -364,7 +364,7 @@ func TestTenantHostLoginExplainsUnconfiguredGoLooseTenant(t *testing.T) {
 	}
 
 	request = httptest.NewRequest(http.MethodGet, "/api/auth/login", nil)
-	request.Host = "guess.dev"
+	request.Host = "guess-dev.urpi.be"
 	response = httptest.NewRecorder()
 	api.ServeHTTP(response, request)
 	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), "tenant") {
@@ -379,11 +379,130 @@ func TestLoginWithoutGoLooseRegistryIsNotFound(t *testing.T) {
 		"http://localhost:5173",
 	)
 	request := httptest.NewRequest(http.MethodGet, "/api/auth/login", nil)
-	request.Host = "nmbs.guess.dev"
+	request.Host = "nmbs.guess-dev.urpi.be"
 	response := httptest.NewRecorder()
 	api.ServeHTTP(response, request)
 	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), "not enabled") {
 		t.Fatalf("login without registry = %d %s", response.Code, response.Body.String())
+	}
+}
+
+// The frontend falls back to password sign-in only when it can tell that Go
+// Loose login is unavailable, so a host without a registry must answer 404
+// rather than 401 even when the request carries no session cookie.
+func TestSessionWithoutGoLooseRegistryIsNotFound(t *testing.T) {
+	api := New(
+		newTestHandler(t, nil),
+		security.NewTokenManager("01234567890123456789012345678901", time.Hour),
+		"http://localhost:5173",
+	)
+	request := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	request.Host = "nmbs.guess-dev.urpi.be"
+	response := httptest.NewRecorder()
+	api.ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound || !strings.Contains(response.Body.String(), "not enabled") {
+		t.Fatalf("session without registry = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestSessionOnAnUnconfiguredTenantHostIsNotFound(t *testing.T) {
+	h := newTestHandler(t, nil)
+	browser, err := golooseauth.New(config.GoLooseConfig{
+		AuthDomain: config.DefaultAuthDomain,
+		AppDomain:  config.DefaultAppDomain,
+		Tenants:    map[string]config.GoLooseTenant{"nmbs": {ClientID: "glc_nmbs", ClientSecret: "secret"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.SetBrowserAuth(browser)
+	api := New(h, security.NewTokenManager("01234567890123456789012345678901", time.Hour), "http://localhost:5173")
+
+	request := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	request.Host = "ypto.guess-dev.urpi.be"
+	response := httptest.NewRecorder()
+	api.ServeHTTP(response, request)
+	if response.Code != http.StatusServiceUnavailable ||
+		!strings.Contains(response.Body.String(), "GO_LOOSE_YPTO_CLIENT_ID") {
+		t.Fatalf("unconfigured tenant session = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestSessionWithoutCookieIsUnauthorizedOnATenantHost(t *testing.T) {
+	h := newTestHandler(t, nil)
+	browser, err := golooseauth.New(config.GoLooseConfig{
+		AuthDomain: config.DefaultAuthDomain,
+		AppDomain:  config.DefaultAppDomain,
+		Tenants:    map[string]config.GoLooseTenant{"nmbs": {ClientID: "glc_nmbs", ClientSecret: "secret"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.SetBrowserAuth(browser)
+	api := New(h, security.NewTokenManager("01234567890123456789012345678901", time.Hour), "http://localhost:5173")
+
+	request := httptest.NewRequest(http.MethodGet, "/api/auth/session", nil)
+	request.Host = "nmbs.guess-dev.urpi.be"
+	response := httptest.NewRecorder()
+	api.ServeHTTP(response, request)
+	if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), "missing Go Loose session") {
+		t.Fatalf("session without cookie = %d %s", response.Code, response.Body.String())
+	}
+}
+
+// An ingress proxy may replace the request Host, so the tenant has to be read
+// from X-Forwarded-Host when it is present.
+func TestTenantHostLoginHonorsTheForwardedHost(t *testing.T) {
+	h := newTestHandler(t, nil)
+	browser, err := golooseauth.New(config.GoLooseConfig{
+		AuthDomain: config.DefaultProdAuthDomain,
+		AppDomain:  config.DefaultProdAppDomain,
+		Tenants:    map[string]config.GoLooseTenant{"nmbs": {ClientID: "glc_nmbs", ClientSecret: "secret"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.SetBrowserAuth(browser)
+	api := New(h, security.NewTokenManager("01234567890123456789012345678901", time.Hour), "https://nmbs.guess.urpi.be")
+
+	request := httptest.NewRequest(http.MethodGet, "/api/auth/login", nil)
+	request.Host = "go-guess-api.go-insane-production.svc.cluster.local:8080"
+	request.Header.Set("X-Forwarded-Host", "nmbs.guess.urpi.be")
+	response := httptest.NewRecorder()
+	api.ServeHTTP(response, request)
+
+	location := response.Header().Get("Location")
+	if response.Code != http.StatusFound || !strings.HasPrefix(location, "https://nmbs.auth.urpi.be/connect/authorize?") {
+		t.Fatalf("forwarded host login redirect = %d %s", response.Code, location)
+	}
+	if !strings.Contains(location, "redirect_uri=https%3A%2F%2Fnmbs.guess.urpi.be%2Fapi%2Fauth%2Fcallback") {
+		t.Fatalf("forwarded host callback missing from %s", location)
+	}
+}
+
+func TestCORSAllowsTheConfiguredTenantOrigin(t *testing.T) {
+	api := New(
+		newTestHandler(t, nil),
+		security.NewTokenManager("01234567890123456789012345678901", time.Hour),
+		"https://nmbs.guess.urpi.be",
+	)
+	for _, tc := range []struct {
+		origin string
+		allow  string
+	}{
+		{origin: "https://nmbs.guess.urpi.be", allow: "https://nmbs.guess.urpi.be"},
+		{origin: "http://nmbs.guess-dev.urpi.be:5173", allow: "http://nmbs.guess-dev.urpi.be:5173"},
+		{origin: "http://ypto.guess.local:5173", allow: "http://ypto.guess.local:5173"},
+		{origin: "https://evil.test", allow: ""},
+		{origin: "https://nmbs.guess.urpi.be.evil.test", allow: ""},
+	} {
+		request := httptest.NewRequest(http.MethodOptions, "/api/jobs", nil)
+		request.Header.Set("Origin", tc.origin)
+		response := httptest.NewRecorder()
+		api.ServeHTTP(response, request)
+		if got := response.Header().Get("Access-Control-Allow-Origin"); got != tc.allow {
+			t.Fatalf("CORS allow origin for %q = %q, want %q", tc.origin, got, tc.allow)
+		}
 	}
 }
 

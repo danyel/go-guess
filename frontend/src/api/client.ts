@@ -79,16 +79,10 @@ export function tenantFromHostname(hostname: string): string | null {
   return labels.length >= 3 ? labels[0] : null
 }
 
-export function apiBaseURL(location: Pick<Location, 'hostname' | 'protocol'>): string {
-  const hostname = location.hostname.toLowerCase().replace(/\.$/, '')
-  if (hostname.endsWith('.guess.local')) {
-    return '/api'
-  }
-  return '/api'
-}
-
+// Every tenant host serves the API from its own origin: nginx and Traefik proxy
+// /api to the API container, so the base is always the same-origin path.
 function apiURL(path: string): string {
-  return `${apiBaseURL(window.location)}${path}`
+  return `/api${path}`
 }
 
 function tenantHeader(): Record<string, string> {

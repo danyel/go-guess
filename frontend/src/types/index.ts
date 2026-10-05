@@ -5,6 +5,12 @@ export interface User {
   email: string
   displayName: string
   role: string
+  /**
+   * Absolute URL of the picture Go Loose serves for this person, or empty when
+   * they have not uploaded one. Resolved on every sign-in rather than stored, so
+   * it always reflects the current picture.
+   */
+  avatarUrl?: string
 }
 
 export interface AuthResponse {

@@ -24,16 +24,13 @@ type Registry struct {
 
 func New(cfg config.GoLooseConfig) (*Registry, error) {
 	registry := &Registry{
-		appDomain: strings.TrimPrefix(strings.ToLower(cfg.AppDomain), "."),
+		appDomain: domain(cfg.AppDomain),
 		bySlug:    map[string]*goloose.BrowserAuth{},
-	}
-	if registry.appDomain == "" {
-		registry.appDomain = "guess.dev"
 	}
 	if len(cfg.Tenants) == 0 {
 		return registry, nil
 	}
-	authDomain := strings.TrimPrefix(strings.ToLower(cfg.AuthDomain), ".")
+	authDomain := domain(cfg.AuthDomain)
 	if authDomain == "" {
 		return nil, fmt.Errorf("GO_LOOSE_AUTH_DOMAIN is required when client credentials are configured")
 	}
@@ -42,7 +39,7 @@ func New(cfg config.GoLooseConfig) (*Registry, error) {
 		return nil, err
 	}
 	for slug, tenant := range cfg.Tenants {
-		slug = strings.ToLower(strings.TrimSpace(slug))
+		slug = domain(slug)
 		if slug == "" || strings.Contains(slug, ".") {
 			return nil, fmt.Errorf("invalid Go Loose tenant slug %q", slug)
 		}
@@ -68,11 +65,13 @@ func New(cfg config.GoLooseConfig) (*Registry, error) {
 
 func (r *Registry) AppDomain() string {
 	if r == nil || r.appDomain == "" {
-		return "guess.dev"
+		return config.DefaultAppDomain
 	}
 	return r.appDomain
 }
 
+// ForHost resolves the Go Loose client of the tenant that owns host. Ingress
+// proxies may replace the request Host, so X-Forwarded-Host wins when present.
 func (r *Registry) ForHost(host string) (*goloose.BrowserAuth, string, bool) {
 	if r == nil {
 		return nil, "", false
@@ -82,16 +81,21 @@ func (r *Registry) ForHost(host string) (*goloose.BrowserAuth, string, bool) {
 	return auth, slug, ok
 }
 
+// Host returns the host that identifies the tenant of a request, preferring the
+// proxy-supplied X-Forwarded-Host over the request Host.
+func Host(r *http.Request) string {
+	if forwarded := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); forwarded != "" {
+		return forwarded
+	}
+	return r.Host
+}
+
 func TenantFromHost(host, appDomain string) string {
-	hostname := strings.ToLower(host)
+	hostname := strings.ToLower(strings.TrimSuffix(strings.TrimSpace(host), "."))
 	if parsed, _, err := net.SplitHostPort(host); err == nil {
-		hostname = strings.ToLower(parsed)
+		hostname = strings.ToLower(strings.TrimSuffix(parsed, "."))
 	}
-	appDomain = strings.TrimPrefix(strings.ToLower(appDomain), ".")
-	if appDomain == "" {
-		appDomain = "guess.dev"
-	}
-	suffix := "." + appDomain
+	suffix := "." + domain(appDomain)
 	if !strings.HasSuffix(hostname, suffix) {
 		return ""
 	}
@@ -100,6 +104,11 @@ func TenantFromHost(host, appDomain string) string {
 		return ""
 	}
 	return slug
+}
+
+// domain normalizes a configured host suffix or tenant slug.
+func domain(value string) string {
+	return strings.Trim(strings.ToLower(strings.TrimSpace(value)), ".")
 }
 
 func client(caFile string) (*http.Client, error) {
