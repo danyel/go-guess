@@ -1,6 +1,7 @@
 import { CalendarDays, Mail } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 import type { User } from '../../types'
+import { ThemeControls } from '../../theme'
 import { UserMenu } from './UserMenu'
 
 export function WorkspaceUtilities({
@@ -20,6 +21,7 @@ export function WorkspaceUtilities({
         <CalendarDays size={18} aria-hidden="true" />
         <span>Schedule</span>
       </NavLink>
+      <ThemeControls />
       <UserMenu user={user} onSignOut={onSignOut} />
     </nav>
   )

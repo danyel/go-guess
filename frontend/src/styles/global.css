@@ -1,24 +1,71 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap');
 
+/* Design tokens.
+ *
+ * Every value here is `var(--bn-*, fallback)`. The contract stylesheet published
+ * by go-bananas defines the --bn-* half at run time from whichever palette and
+ * appearance are selected; the second argument is this application's own value,
+ * used whenever that stylesheet is absent.
+ *
+ * That ordering is what makes the feature safe to adopt: with no theme service
+ * configured the page renders exactly as it did before, and with one configured
+ * the same rules follow the palette. Nothing below this block needs to know which
+ * of the two it is getting. */
 :root {
   font-family: 'DM Sans', system-ui, sans-serif;
-  color: #142b3a;
-  background: #f3f7f8;
+  color: var(--ink);
+  background: var(--page);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  --navy: #081c2c;
-  --navy-soft: #123449;
-  --ink: #142b3a;
-  --muted: #667986;
-  --line: #dce5e8;
-  --surface: #ffffff;
-  --cyan: #00a9c8;
-  --cyan-dark: #007f98;
-  --lime: #d9ef4d;
-  --orange: #ff7c52;
-  --radius: 16px;
-  --shadow: 0 12px 35px rgba(14, 42, 56, 0.08);
+
+  /* Surfaces, from the page up to the most raised. */
+  --page: var(--bn-bg, #f3f7f8);
+  --surface: var(--bn-surface, #ffffff);
+  --raised: var(--bn-surface-raised, #ffffff);
+  --sunken: var(--bn-surface-sunken, #eef3f4);
+
+  /* The navigation rail is a distinct plane rather than another surface, so it
+   * takes the sunken step: readable against the page in either appearance. */
+  --navy: var(--bn-surface-sunken, #081c2c);
+  --navy-soft: var(--bn-surface, #123449);
+  /* Text on the rail. It comes from the contract's own foreground pairing rather
+   * than being fixed to white, because a light appearance wants dark text there. */
+  --on-rail: var(--bn-on-secondary, #ffffff);
+
+  /* Text. */
+  --ink: var(--bn-text, #142b3a);
+  --muted: var(--bn-muted, #667986);
+  --subtle: var(--bn-subtle, #8a9aa4);
+
+  /* Lines. */
+  --line: var(--bn-border, #dce5e8);
+  --line-strong: var(--bn-border-strong, #c2d2d6);
+
+  /* Accents. */
+  --cyan: var(--bn-accent, #00a9c8);
+  --cyan-dark: var(--bn-accent-hover, #007f98);
+  --lime: var(--bn-secondary, #d9ef4d);
+  --orange: var(--bn-warning, #ff7c52);
+  --good: var(--bn-good, #13704d);
+  --danger: var(--bn-danger, #b3261e);
+  --focus: var(--bn-focus, #007f98);
+
+  /* Shape and depth. */
+  --radius: var(--bn-radius-lg, 16px);
+  --radius-sm: var(--bn-radius-md, 10px);
+  --shadow: var(--bn-shadow-md, 0 12px 35px rgba(14, 42, 56, 0.08));
 }
+
+/* Native widgets follow the selected appearance, so a scrollbar, a text
+ * selection, or a date picker in a form is not light-on-light in dark mode. The
+ * light default keeps a browser without a theme service exactly as it was. */
+:root {
+  color-scheme: light;
+}
+:root[data-mode='dark'] {
+  color-scheme: dark;
+}
+
 .eligible-row {
   grid-template-columns: auto 1fr;
 }
@@ -31,7 +78,7 @@
 }
 html {
   min-width: 320px;
-  background: #f3f7f8;
+  background: var(--page);
 }
 body {
   margin: 0;
@@ -247,7 +294,7 @@ button {
 }
 .login-story {
   background: var(--navy);
-  color: white;
+  color: var(--on-rail);
   padding: 2.2rem clamp(2rem, 6vw, 6rem);
   display: flex;
   flex-direction: column;
@@ -325,12 +372,12 @@ button {
   display: grid;
   place-items: center;
   padding: 2rem;
-  background: #f3f7f8;
+  background: var(--page);
 }
 .login-card {
   width: min(430px, 100%);
   padding: clamp(1.8rem, 5vw, 3rem);
-  background: white;
+  background: var(--raised);
   border-radius: 20px;
   box-shadow: var(--shadow);
 }
@@ -364,7 +411,7 @@ button {
   justify-content: center;
 }
 .form-error {
-  color: #a92e2e;
+  color: var(--danger);
 }
 .error-alert {
   display: flex;
@@ -411,7 +458,7 @@ button {
   inset: 0 auto 0 0;
   width: 255px;
   background: var(--navy);
-  color: white;
+  color: var(--on-rail);
   display: flex;
   flex-direction: column;
   padding: 1.6rem 1.1rem;
@@ -674,8 +721,8 @@ button {
   color: var(--cyan-dark);
 }
 .card {
-  background: white;
-  border: 1px solid #e1e9eb;
+  background: var(--raised);
+  border: 1px solid var(--line);
   border-radius: var(--radius);
   box-shadow: 0 6px 24px rgba(14, 42, 56, 0.04);
 }
@@ -2915,4 +2962,22 @@ fieldset {
   .user-menu-trigger {
     padding: 0.3rem;
   }
+}
+
+/* Theme controls.
+   The controls render into their own shadow root, so nothing here can reach
+   inside them and nothing inside can leak out. They inherit the custom
+   properties that cross the boundary, which is why they follow the palette
+   without a single rule of their own. */
+.theme-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.login-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
 }

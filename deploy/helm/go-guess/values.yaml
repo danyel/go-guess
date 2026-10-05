@@ -32,6 +32,12 @@ api:
   # Public base URL used when building invitation and meeting links. Defaults to
   # https://<first tenant>.<domain> when empty.
   frontendURL: ""
+  # Origin of the go-bananas runtime supplying the shared styling contract, for
+  # example https://themes.urpi.be. Empty keeps this application's own styles, so
+  # a deployment without a theme service is unaffected. The service must also be
+  # configured to allow this application's origin, or the browser will refuse to
+  # load the controls from it.
+  themeBaseUrl: ""
   tokenTTL: 8h
   maxUploadMB: 10
   service:

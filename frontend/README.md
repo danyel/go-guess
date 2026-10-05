@@ -46,9 +46,54 @@ hostnames use same-origin `/api`; Vite retains its `/api` proxy for that case.
 `src/components/actions/Account.tsx` treats any host whose first DNS label is a
 tenant as a possible Go Loose host and asks `/api/auth/session` whether browser
 login is available there. A `404` means the API has no Go Loose login for the
-host, so the password form is shown; any other unauthenticated answer means Go
-Loose is configured and the app redirects to `/api/auth/login`. The callback
-exchanges that session for the bearer token used by the typed API client.
+host, so the password form is shown. Otherwise the sign-in screen offers a single
+button that hands the browser to Go Loose, which returns to the welcome page.
+Nothing redirects to the identity provider on its own: that fired on every
+anonymous visit and read as a redirect loop rather than as a choice to sign in.
+A person who already signed in at another application passes straight through,
+because Go Loose recognises the session it holds and issues a code without
+asking anything. The callback exchanges that session for the bearer token used by
+the typed API client. Participant routes are exempt: a participant opens the
+application through a token link and is never signing in.
+
+## Theming
+
+The palette and the light/dark switch come from
+[go-bananas](https://github.com/urpi/go-bananas), the design-token service, as
+runtime CSS custom properties. Three pieces, and the application installs all
+three itself:
+
+- `src/theme/installThemeRuntime.ts` injects
+  `<link rel="stylesheet" href="$THEME_BASE_URL/rt/v1/contract.css" data-theme-contract>`
+  and imports `$THEME_BASE_URL/rt/v1/components.js`. Both are best effort: a
+  theme service that is absent, slow, or unreachable must not stop the
+  application working.
+- `src/theme/ThemeControls.tsx` renders the service's own custom elements,
+  `<bananas-theme-selector>` and `<bananas-appearance-toggle>`. They are custom
+  elements rather than components written here because the applications this
+  service feeds are a mix of React, vanilla JavaScript, and server-rendered HTML,
+  and a custom element is the one shape all three can use with no build step, no
+  import map, and no second copy of React. React treats an unknown element as an
+  inert host node, so rendering them unconditionally is safe.
+- Every token in `src/styles/global.css` is written as
+  `var(--bn-*, fallback)`. That ordering is the whole safety property: with no
+  theme service configured the page renders exactly as it did before, and with
+  one configured the same rules follow the palette.
+
+`THEME_BASE_URL` is read from `runtime-config.js`, which the container entrypoint
+rewrites from the environment on start, so one image serves every environment.
+`VITE_THEME_BASE_URL` is the equivalent for `npm run dev`.
+
+Two deployment requirements are easy to miss. The service must be configured to
+allow this application's origin (`CORS_ALLOWED_ORIGINS` on go-bananas), or the
+browser refuses to load the controls from it, because a module script is always
+fetched with CORS. And `api.themeBaseUrl` in the Helm values must be set; it is
+empty by default, which disables theming.
+
+`src/theme/contract.test.ts` fetches the live contract and asserts it defines
+every `--bn-*` variable this application consumes. A token renamed on the service
+would otherwise leave every `var()` resolving to its fallback, and the page would
+look correct while never actually following the palette.
 Invitation and participant-meeting URLs use the validated request origin so
 links stay on the tenant hostname. Copy actions fall back to a temporary selected
 textarea when the Clipboard API is unavailable on local HTTP domains.

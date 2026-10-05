@@ -212,6 +212,21 @@ The `Dockerfile` at the repository root still builds one combined image that
 serves both halves on port `8080`. It is convenient for local runs and browser
 BDD tests, while Kubernetes deploys the two images separately.
 
+That combined image runs as the `app` user, which owns everything the runtime
+writes to. There is deliberately only one `USER` line: a second one silently
+replaced it with a uid owning neither `/app` nor `/tmp/nginx`, and nginx could
+then not create its pid file or its temp paths, so the container failed to start.
+nginx ignores its own `user` directive when the master is not root, so its
+workers run as whoever this names.
+
+`THEME_BASE_URL` points the page at the [go-bananas](https://github.com/urpi/go-bananas)
+design-token service, which supplies the palette and the light/dark switch at run
+time. It is optional and empty by default, so an image without a theme service
+renders exactly as before. The entrypoint writes it into `runtime-config.js` on
+every start, so one image serves every environment. See
+[the front-end README](frontend/README.md#theming) for the deployment
+requirements.
+
 Pushes to `master` publish `go-guess:latest` and `go-guess:<commit-sha>` to the
 private registry configured in `.github/workflows/publish-image.yml`. The
 repository must provide `REGISTRY_USERNAME` and `REGISTRY_PASSWORD` secrets.

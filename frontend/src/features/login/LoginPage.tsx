@@ -3,6 +3,7 @@ import { SyntheticEvent, useState } from 'react'
 import Logo from '../../components/layout/Logo'
 import { FormField } from '../../components/form'
 import { ErrorAlert, errorMessage } from '../../components/actions'
+import { ThemeControls } from '../../theme'
 import { api, authStorage } from '../../api/client'
 
 const LOGIN_PATH = '/api/auth/login'
@@ -73,7 +74,10 @@ export function LoginPage({
             </span>
           </div>
         </div>
-        <p className="login-foot">Designed for fair, collaborative recruitment.</p>
+        <div className="login-foot">
+          <ThemeControls />
+          <p>Designed for fair, collaborative recruitment.</p>
+        </div>
       </section>
       <section className="login-panel" aria-labelledby="login-title">
         <div className="login-card">

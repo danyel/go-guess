@@ -13,6 +13,13 @@ seed
 
 mkdir -p /tmp/nginx
 
+# The theme service location is environment, not build time, so one image serves
+# every environment. The file is regenerated on every start and is read by the
+# page before the bundle runs.
+cat > /app/frontend/runtime-config.js <<CONFIG
+window.__GO_GUESS_CONFIG__ = { themeBaseUrl: "${THEME_BASE_URL:-}" }
+CONFIG
+
 api &
 api_pid=$!
 nginx -e /dev/stderr -g 'daemon off;' &

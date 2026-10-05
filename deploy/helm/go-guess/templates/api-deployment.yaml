@@ -46,6 +46,13 @@ spec:
               value: {{ .Values.api.environment | quote }}
             - name: FRONTEND_URL
               value: {{ include "go-guess.frontendURL" . | quote }}
+            {{- with .Values.api.themeBaseUrl }}
+            # The theme service is read by the browser, not the API, so it is passed
+            # through to the entrypoint, which writes the runtime config the page
+            # reads. Empty means this deployment keeps its own styling.
+            - name: THEME_BASE_URL
+              value: {{ . | quote }}
+            {{- end }}
             - name: TOKEN_TTL
               value: {{ .Values.api.tokenTTL | quote }}
             - name: MAX_UPLOAD_MB

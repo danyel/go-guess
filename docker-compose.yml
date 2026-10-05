@@ -37,6 +37,8 @@ services:
       DATABASE_URL: postgres://go_guess:go_guess@db:5432/go_guess?sslmode=disable
       JWT_SECRET: local-development-secret-change-me-12345
       FRONTEND_URL: ${FRONTEND_URL:-https://nmbs.guess-dev.urpi.be}
+      # Where the go-bananas styling contract is served from. Empty disables it.
+      THEME_BASE_URL: ${THEME_BASE_URL:-}
       APP_ENV: ${APP_ENV:-development}
       GO_LOOSE_AUTH_DOMAIN: ${GO_LOOSE_AUTH_DOMAIN:-auth-dev.urpi.be}
       GO_LOOSE_APP_DOMAIN: ${GO_LOOSE_APP_DOMAIN:-guess-dev.urpi.be}

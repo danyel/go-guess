@@ -36,8 +36,12 @@ COPY --chown=app:app backend/migrations/ ./migrations/
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/entrypoint.sh /usr/local/bin/go-guess-entrypoint
 
+# One user, and it owns everything the runtime writes to. A second USER line here
+# silently replaced this one with a uid that owns neither /app nor /tmp/nginx, so
+# nginx could not create its pid file or its temp paths and the container failed to
+# start. nginx also ignores its own user directive when the master is not root, so
+# its workers run as whoever this names.
 USER app
-USER 1000
 EXPOSE 8080
 ENV ADDRESS=:8081 \
     APP_ENV=production \
